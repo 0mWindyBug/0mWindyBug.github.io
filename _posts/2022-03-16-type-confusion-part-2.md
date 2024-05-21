@@ -6,7 +6,7 @@ excerpt: "Leveraging ChakraCore to convert our denial-of-service from part 1 int
 ---
 Introduction
 ---
-In [part one](https://connormcgarr.github.io/type-confusion-part-1/) we went over setting up a ChakraCore exploit development environment, understanding how JavaScript (more specifically, the Chakra/ChakraCore engine) manages dynamic objects in memory, and vulnerability analysis of CVE-2019-0567 - a type confusion vulnerability that affects Chakra-based Microsoft Edge and ChakraCore. In this post, part two, we will pick up where we left off and begin by taking our proof-of-concept script, which "crashes" Edge and ChakraCore as a result of the type confusion vulnerability, and convert it into a read/write primtive. This primitive will then be used to gain code execution against ChakraCore and the ChakraCore shell, `ch.exe`, which essentially is a command-line JavaScript shell that allows execution of JavaScript. For our purposes, we can think of `ch.exe` as Microsoft Edge, but without the visuals. Then, in part three, we will port our exploit to Microsoft Edge to gain full code execution.
+In [part one](https://connormcgarr.github.io/type-confusion-part-1/) we went over setting up a ChakraCore exploit development environment, understanding how JavaScript (more specifically, the Chakra/ChakraCore engine) manages dynamic objects in memory, and vulnerability analysis of CVE-2019-0567 - a type confusion vulnerability that affects Chakra-based Microsoft Edge and ChakraCore. In this post, part two, we will pick up where we left off and begin by taking our proof-of-concept script, which "crashes" Edge and ChakraCore as a result of the type confusion vulnerability, and convert it into a read/write primitive. This primitive will then be used to gain code execution against ChakraCore and the ChakraCore shell, `ch.exe`, which essentially is a command-line JavaScript shell that allows execution of JavaScript. For our purposes, we can think of `ch.exe` as Microsoft Edge, but without the visuals. Then, in part three, we will port our exploit to Microsoft Edge to gain full code execution.
 
 This post will also be dealing with ASLR, DEP, and Control Flow Guard (CFG) exploit mitigations. As we will see in part three, when we port our exploit to Edge, we will also have to deal with Arbitrary Code Guard (ACG). However, this mitigation isn't enabled within ChakraCore - so we won't have to deal with it within this blog post.
 
@@ -121,7 +121,7 @@ Notice what happens to the `o` object, as our vulnerability manifests. When `o->
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/2typeconfusion12.png" alt="">
 
-Anytime we act on `o.a`, we will now be acting on the `vftable` of `obj`! This is great, but how can we take this further? Take not that the `vftable` is actually a user-mode address that resides within `chakracore.dll`. This means, if we were able to leak a `vftable` from an object, we would bypass ASLR. Let's see how we can possibly do this.
+Anytime we act on `o.a`, we will now be acting on the `vftable` of `obj`! This is great, but how can we take this further? Take note that the `vftable` is actually a user-mode address that resides within `chakracore.dll`. This means, if we were able to leak a `vftable` from an object, we would bypass ASLR. Let's see how we can possibly do this.
 
 `DataView` Objects
 ---
@@ -182,7 +182,7 @@ print("DEBUG");
 dataviewObj = new DataView(new ArrayBuffer(0x100));
 
 // Set data in the buffer
-dataviewObj.setUint32(0x0, 0x41414141, true);	// Set, at an offset of 0 in the buffer, the value 0x41414141 and specify litte-endian (true)
+dataviewObj.setUint32(0x0, 0x41414141, true);	// Set, at an offset of 0 in the buffer, the value 0x41414141 and specify little-endian (true)
 ```
 
 Notice the level of control we have in respect to the amount of data, the type of data, and the offset of the data in the buffer we can set/retrieve.
@@ -227,8 +227,8 @@ print("DEBUG");
 dataviewObj = new DataView(new ArrayBuffer(0x100));
 
 // Set data in the buffer
-dataviewObj.setUint32(0x0, 0x41414141, true);	// Set, at an offset of 0 in the buffer, the value 0x41414141 and specify litte-endian (true)
-dataviewObj.setUint32(0x4, 0x41414141, true);	// Set, at an offset of 4 in the buffer, the value 0x41414141 and specify litte-endian (true)
+dataviewObj.setUint32(0x0, 0x41414141, true);	// Set, at an offset of 0 in the buffer, the value 0x41414141 and specify little-endian (true)
+dataviewObj.setUint32(0x4, 0x41414141, true);	// Set, at an offset of 4 in the buffer, the value 0x41414141 and specify little-endian (true)
 ```
 
 Using the exact same methodology as before, we can return to our `mov dword ptr [rax], rcx` instruction which writes our data to a buffer to see that using `DataView` objects it is possible to set a value in JavaScript as a contiguous 64-bit value _without_ NaN-boxing and without being restricted to just a JavaScript object address! 
@@ -273,7 +273,7 @@ From the above image, we can clearly see that if there was a property `c` of `o`
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/2typeconfusion28.png" alt="">
 
-By setting `o.c` to a `DataView` object, we can control the entire contents of the `DataView` object by acting on the `obj` object! This is identical to the exact same scenario shown above where the `auxSlots` pointer was overwritten with the address of _another_ object, but we saw we could fully control that object (`vftable` and all metadata) by acting on the corrupted object! This is because ChakraCore, again, still treats `auxSlots` as though it hasn't been overwritten with another value. When we try to access `obj.a` in this case, ChakraCore fetches the `auxSlots` pointer stored at `obj+0x10` and then tries to index that memory at an offset of `0`. Since that is now another object in memory (in this case a `DataView` object), `obj.a` will still gladly fetch whatever is stored at an offset of `0`, which is the `vftable` for our `DataView` object! This is also the reason we declared `obj` with so many values, as a `DataView` object has a few more hidden properties than a standard dynamic object. By decalring `obj` with many properties, it allows us access to all of the needed properties of the `DataView` object, since we aren't stopping at `dataview+0x10`, like we have been with other objects since we only cared about the `auxSlots` pointers in those cases.
+By setting `o.c` to a `DataView` object, we can control the entire contents of the `DataView` object by acting on the `obj` object! This is identical to the exact same scenario shown above where the `auxSlots` pointer was overwritten with the address of _another_ object, but we saw we could fully control that object (`vftable` and all metadata) by acting on the corrupted object! This is because ChakraCore, again, still treats `auxSlots` as though it hasn't been overwritten with another value. When we try to access `obj.a` in this case, ChakraCore fetches the `auxSlots` pointer stored at `obj+0x10` and then tries to index that memory at an offset of `0`. Since that is now another object in memory (in this case a `DataView` object), `obj.a` will still gladly fetch whatever is stored at an offset of `0`, which is the `vftable` for our `DataView` object! This is also the reason we declared `obj` with so many values, as a `DataView` object has a few more hidden properties than a standard dynamic object. By declaring `obj` with many properties, it allows us access to all of the needed properties of the `DataView` object, since we aren't stopping at `dataview+0x10`, like we have been with other objects since we only cared about the `auxSlots` pointers in those cases.
 
 This is where things really start to pick up. We know that `DataView.buffer` is stored as a pointer. This can clearly be seen below by our previous investigative work on understanding `DataView` objects.
 
@@ -325,7 +325,7 @@ dataview2.setUint32(0x0, 0x42424242, true);
 dataview2.setUint32(0x4, 0x42424242, true);
 ```
 
-If we invoke `setUint32()` on `dataview2`, we do so at an offset of `0`. This is because we are not attempting to corrupt any other objects, we are intending to use `dataview2.setUint32()` in a legitimate fashion. When `dataview2->setUint32()` is invoked, it will fetch the address of the `buffer` from `dataview2` by locating `dataview2+0x38`, derefencing the address, and attempting to write the value `0x4242424242424242` (as seen above) into the address.
+If we invoke `setUint32()` on `dataview2`, we do so at an offset of `0`. This is because we are not attempting to corrupt any other objects, we are intending to use `dataview2.setUint32()` in a legitimate fashion. When `dataview2->setUint32()` is invoked, it will fetch the address of the `buffer` from `dataview2` by locating `dataview2+0x38`, dereferencing the address, and attempting to write the value `0x4242424242424242` (as seen above) into the address.
 
 The issue is, however, is that we used a type confusion vulnerability to update `dataview2->buffer` to a _different_ address (in this case an invalid address of `0x4141414141414141`). This is the address `dataview2` will now attempt to write to, which obviously will cause an access violation.
 
@@ -529,7 +529,7 @@ We can then set a breakpoint on our final `mov qword ptr [rcx+rax*8], rdx` instr
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/2typeconfusion47.png" alt="">
 
-After hitting the instruction, we can can see that our `dataview1` object is about to be operated on, and we can see that the `buffer` of our `dataview1` object currently poitns to `0x24471ebed0`.
+After hitting the instruction, we can see that our `dataview1` object is about to be operated on, and we can see that the `buffer` of our `dataview1` object currently points to `0x24471ebed0`.
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/2typeconfusion48.png" alt="">
 
@@ -672,7 +672,7 @@ main();
 
 We can see we added a few things above. The first is our `hex()` function, which really is just for "pretty printing" purposes. It allows us to convert a value to hex, which is obviously how user-mode addresses are represented in Windows.
 
-Secondly, we can see our `read64()` function. This is practically dentical to what we displayed with the arbitrary write primitive. We use `dataview1` to corrupt the `buffer` of `dataview2` with the address we want to read from. However, instead of using `dataview2.setUint32()` to overwrite our target address, we use the `getUint32()` method to retrieve `0x8` bytes from our target address.
+Secondly, we can see our `read64()` function. This is practically identical to what we displayed with the arbitrary write primitive. We use `dataview1` to corrupt the `buffer` of `dataview2` with the address we want to read from. However, instead of using `dataview2.setUint32()` to overwrite our target address, we use the `getUint32()` method to retrieve `0x8` bytes from our target address.
 
 Lastly, `write64()` is _identical_ to what we displayed in the code before the code above, where we walked through the process of performing an arbitrary write. We have simply "templatized" the read/write process to make our exploitation much more efficient.
 
@@ -781,7 +781,7 @@ However, instead of using `setUint32()` methods to overwrite the `vftable`, we u
 
 Another thing to notice is we have broken up our read into two parts. This, as we remember, is because we can only read/write 32-bits at a time - so we must do it twice to achieve a 64-bit read/write.
 
-It is important to note that we will _not_ step through the debugger ever `read64()` and `write64()` function call. This is because we, in great detail, have already viewed our arbitrary write primitive in action within WinDbg. We already know what it looks like to corrupt `dataview2->buffer` using the builtin `DataView` method `setUint32()`, and then using the same method, on behalf of `dataview2`, to actually overwrite the buffer with our own data. Because of this, anything performed here on out in WinDbg will be purely for exploitation reasons. Here is what this looks like when executed in `ch.exe`.
+It is important to note that we will _not_ step through the debugger every `read64()` and `write64()` function call. This is because we, in great detail, have already viewed our arbitrary write primitive in action within WinDbg. We already know what it looks like to corrupt `dataview2->buffer` using the builtin `DataView` method `setUint32()`, and then using the same method, on behalf of `dataview2`, to actually overwrite the buffer with our own data. Because of this, anything performed here on out in WinDbg will be purely for exploitation reasons. Here is what this looks like when executed in `ch.exe`.
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/2typeconfusion63.png" alt="">
 
@@ -879,7 +879,7 @@ Here is the updated code to get the base address of `kernel32.dll`:
     // Print update
     print("[+] ChakraCore.dll base address: 0x" + hex(chakraHigh) + hex(chakraLo));
 
-    // Leak a pointer to kernel32.dll from from ChakraCore's IAT (for who's base address we already have)
+    // Leak a pointer to kernel32.dll from ChakraCore's IAT (for who's base address we already have)
     iatEntry = read64(chakraLo+0x17c0000+0x40, chakraHigh);     // KERNEL32!RaiseExceptionStub pointer
 
     // Store the upper part of kernel32.dll
@@ -924,7 +924,7 @@ Code Execution - CFG Edition
 ---
 In my previous [post](https://connormcgarr.github.io/browser1/) on exploiting Internet Explorer, we achieved code execution by faking a `vftable` and overwriting the function pointer with our ROP chain. This method is not possible in ChakraCore, or Edge, because of CFG.
 
-CFG is an exploit mitigation that validates any indirect function calls. Any function call that performs `call qword ptr [reg]` would be considered an indirect function call, because there is now way for the program to know what RAX is pointing to when the call happens, so if an attacker was able to overwrite the pointer being called, they obviously can redirect execution anywhere in memory they control. This exact scenario is what we accomplished with our Internet Explorer vulnerability, but that is no longer possible.
+CFG is an exploit mitigation that validates any indirect function calls. Any function call that performs `call qword ptr [reg]` would be considered an indirect function call, because there is no way for the program to know what RAX is pointing to when the call happens, so if an attacker was able to overwrite the pointer being called, they obviously can redirect execution anywhere in memory they control. This exact scenario is what we accomplished with our Internet Explorer vulnerability, but that is no longer possible.
 
 With CFG enabled, anytime one of these indirect function calls is executed, we can now actually check to ensure that the function wasn't overwritten with a nefarious address, controlled by an attacker. I won't go into more detail, as I have already written about control-flow integrity on Windows [before](https://connormcgarr.github.io/examining-xfg/), but CFG basically means that we can't overwrite a function pointer to gain code execution. So how do we go about this?
 
@@ -971,7 +971,7 @@ In order to find a return address to overwrite on the stack (really any active t
     // Print update
     print("[+] ChakraCore.dll base address: 0x" + hex(chakraHigh) + hex(chakraLo));
 
-    // Leak a pointer to kernel32.dll from from ChakraCore's IAT (for who's base address we already have)
+    // Leak a pointer to kernel32.dll from ChakraCore's IAT (for who's base address we already have)
     iatEntry = read64(chakraLo+0x17c0000+0x40, chakraHigh);     // KERNEL32!RaiseExceptionStub pointer
 
     // Store the upper part of kernel32.dll
@@ -1021,7 +1021,7 @@ As we can see above, ChakraCore/Chakra stores various stack addresses within thi
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/2typeconfusion81.png" alt="">
 
-As we can see, we are `0xed000` bytes away from the `StackLimit` of the current thread. This is perfectly okay, because this value won't change in between reboots or ChakraCore being restated. This will be subject to change in our Edge exploit, and we will leak a _different_ stack address within this structure. For now though, let's use `stackLimitForCurrrentThread`.
+As we can see, we are `0xed000` bytes away from the `StackLimit` of the current thread. This is perfectly okay, because this value won't change in between reboots or ChakraCore being restated. This will be subject to change in our Edge exploit, and we will leak a _different_ stack address within this structure. For now though, let's use `stackLimitForCurrentThread`.
 
 Here is our updated code, including the stack leak.
 
@@ -1056,7 +1056,7 @@ Here is our updated code, including the stack leak.
     // Print update
     print("[+] ChakraCore.dll base address: 0x" + hex(chakraHigh) + hex(chakraLo));
 
-    // Leak a pointer to kernel32.dll from from ChakraCore's IAT (for who's base address we already have)
+    // Leak a pointer to kernel32.dll from ChakraCore's IAT (for who's base address we already have)
     iatEntry = read64(chakraLo+0x17c0000+0x40, chakraHigh);     // KERNEL32!RaiseExceptionStub pointer
 
     // Store the upper part of kernel32.dll
@@ -1141,7 +1141,7 @@ Let's start by adding a loop in our `exploit.js` which scans the stack.
     // Print update
     print("[+] ChakraCore.dll base address: 0x" + hex(chakraHigh) + hex(chakraLo));
 
-    // Leak a pointer to kernel32.dll from from ChakraCore's IAT (for who's base address we already have)
+    // Leak a pointer to kernel32.dll from ChakraCore's IAT (for who's base address we already have)
     iatEntry = read64(chakraLo+0x17c0000+0x40, chakraHigh);     // KERNEL32!RaiseExceptionStub pointer
 
     // Store the upper part of kernel32.dll
@@ -1272,7 +1272,7 @@ With this in mind, we can update our `exploit.js` to the following, which should
     // Print update
     print("[+] ChakraCore.dll base address: 0x" + hex(chakraHigh) + hex(chakraLo));
 
-    // Leak a pointer to kernel32.dll from from ChakraCore's IAT (for who's base address we already have)
+    // Leak a pointer to kernel32.dll from ChakraCore's IAT (for who's base address we already have)
     iatEntry = read64(chakraLo+0x17c0000+0x40, chakraHigh);     // KERNEL32!RaiseExceptionStub pointer
 
     // Store the upper part of kernel32.dll
@@ -1403,7 +1403,7 @@ mov qword [rcx], rax ; ret (fill pointer with calc)
 
 Where we have currently overwritten our return address with a value of `0x4141414141414141`, we will place our first ROP gadget of `pop rax ; ret` there to begin our ROP chain. We will then write the rest of our gadgets down the rest of the stack, where our ROP payload will be executed.
 
-Our previous three ROP gagdets will place the string `calc` into RAX, the pointer where we want to write this string into RCX, and then a gadget used to actually update the contents of this pointer with the string.
+Our previous three ROP gadgets will place the string `calc` into RAX, the pointer where we want to write this string into RCX, and then a gadget used to actually update the contents of this pointer with the string.
 
 Let's update our `exploit.js` script with these ROP gadgets (note that `rp++` can't compensate for ASLR, and essentially computes the offset from the base of `chakracore.dll`. For example, the `pop rax` gadget is shown to be at `0x18003e876`. What this means is that we can actually find this gadget at `chakracore_base + 0x3e876`.)
 
@@ -1438,7 +1438,7 @@ Let's update our `exploit.js` script with these ROP gadgets (note that `rp++` ca
     // Print update
     print("[+] ChakraCore.dll base address: 0x" + hex(chakraHigh) + hex(chakraLo));
 
-    // Leak a pointer to kernel32.dll from from ChakraCore's IAT (for who's base address we already have)
+    // Leak a pointer to kernel32.dll from ChakraCore's IAT (for who's base address we already have)
     iatEntry = read64(chakraLo+0x17c0000+0x40, chakraHigh);     // KERNEL32!RaiseExceptionStub pointer
 
     // Store the upper part of kernel32.dll
@@ -1620,7 +1620,7 @@ The above gadgets will fill RDX with our last parameter, and then place `WinExec
     // Print update
     print("[+] ChakraCore.dll base address: 0x" + hex(chakraHigh) + hex(chakraLo));
 
-    // Leak a pointer to kernel32.dll from from ChakraCore's IAT (for who's base address we already have)
+    // Leak a pointer to kernel32.dll from ChakraCore's IAT (for who's base address we already have)
     iatEntry = read64(chakraLo+0x17c0000+0x40, chakraHigh);     // KERNEL32!RaiseExceptionStub pointer
 
     // Store the upper part of kernel32.dll
@@ -1851,7 +1851,7 @@ function main() {
     // Print update
     print("[+] ChakraCore.dll base address: 0x" + hex(chakraHigh) + hex(chakraLo));
 
-    // Leak a pointer to kernel32.dll from from ChakraCore's IAT (for who's base address we already have)
+    // Leak a pointer to kernel32.dll from ChakraCore's IAT (for who's base address we already have)
     iatEntry = read64(chakraLo+0x17c0000+0x40, chakraHigh);     // KERNEL32!RaiseExceptionStub pointer
 
     // Store the upper part of kernel32.dll

