@@ -12,7 +12,7 @@
 
 # theme                  : "minimal-mistakes-jekyll"
 # remote_theme           : "mmistakes/minimal-mistakes"
-minimal_mistakes_skin    : "neon" # "air", "aqua", "contrast", "dark", "dirt", "neon", "mint", "plum", "sunrise"
+minimal_mistakes_skin    : "dark" # "air", "aqua", "contrast", "dark", "dirt", "neon", "mint", "plum", "sunrise"
 
 # Site Settings
 locale                   : "en-US"
@@ -104,32 +104,22 @@ analytics:
 
 # Site Author
 author:
-  name             : "Connor McGarr"
-  avatar           : "/images/picfeb.jpg"
-  bio              : "Software Engineer @ CrowdStrike | Exploit Development and Vulnerability Research"
-  location         : "United States"
-  linkedin	       : "connor-mcgarr-7522a6152/"
-  twitter          : "33y0re"
-  email            :
+  name             : "Dor Gerson"
+  avatar           : "/images/avatar.png"
+  bio              : "Windows Internals & Driver Development"
   links:
-    - label: "Email"
-      icon: "fas fa-fw fa-envelope-square"
-      url: mailto:connormcgarr7@gmail.com
     - label: "GitHub"
       icon: "fab fa-fw fa-github"
-      url: "https://github.com/connormcgarr"
+      url: "https://github.com/0mWindyBug"
 # Site Footer
 footer:
   links:
     - label: "GitHub"
       icon: "fab fa-fw fa-github"
-      url: "https://github.com/connormcgarr"
-    - label: "Linkedin"
-      icon: "fab fa-fw fa-linkedin"
-      url: "http://linkedin.com/in/connor-mcgarr-7522a6152/"
+      url: "https://github.com/0mWindyBug"
     - label: "Twitter"
       icon: "fab fa-fw fa-twitter"
-      url: "https://twitter.com/33y0re"
+      url: "https://x.com/0xwindybug"
 
 
 # Reading Files
