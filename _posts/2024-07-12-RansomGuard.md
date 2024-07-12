@@ -12,6 +12,15 @@ In this blogpost , we are going cover the existing detection methods , the requi
 
 
 ## anti-ransomware methods 
+
+#### API monitoring   
+Some security solutions monitor API calls , usually flagging suspicious call sequences. 
+Whilst monitoring system calls at the kernel level is a worthwhile approach , it's resource-intensive  <br />  
+In addition , due to KPP in order for a security solution to hook system calls it will have to either load a hypervisor or leverage techniques like InfinityHook which are bound to be broken , either way such approach may lead to many false positives .
+
+#### HoneyPots 
+
+
  
 ## Entropy 
 
