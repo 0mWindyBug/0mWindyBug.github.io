@@ -1,10 +1,9 @@
 ---
 title:  "RansomGuard : writing an anti-ransomware filter driver"
-date:   2024-07-20
+date:   2024-07-12
 tags: [posts]
 excerpt: "Anti Ransomware minifilter driver"
-
-
+---
 
 ---
 Introduction
