@@ -59,7 +59,6 @@ double utils::CalculateEntropy(PVOID Buffer, size_t Size)
 #### Statistics  
 
 
-#### Statictics ? 
 
 
  
