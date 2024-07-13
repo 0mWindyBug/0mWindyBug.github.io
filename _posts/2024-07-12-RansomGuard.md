@@ -67,8 +67,9 @@ It's important to note that easy to write does not mean easy to design , which r
 
 
 ## Filtering file-system opertions 
-a minifilter calls ```FltRegisterFilter``` , passing a ```FLT_REGISTRATION``` structure which maps as below : 
-``` typedef struct _FLT_REGISTRATION {
+a minifilter calls ```FltRegisterFilter``` , passing a ```FLT_REGISTRATION``` structure : 
+``` cpp
+typedef struct _FLT_REGISTRATION {
   USHORT                                      Size;
   USHORT                                      Version;
   FLT_REGISTRATION_FLAGS                      Flags;
@@ -86,7 +87,7 @@ a minifilter calls ```FltRegisterFilter``` , passing a ```FLT_REGISTRATION``` st
   PFLT_NORMALIZE_NAME_COMPONENT_EX            NormalizeNameComponentExCallback;
   PFLT_SECTION_CONFLICT_NOTIFICATION_CALLBACK SectionNotificationCallback;
 } FLT_REGISTRATION, *PFLT_REGISTRATION;
-``` 
+```
 
 #### what can you return from your filters (return value) 
 
