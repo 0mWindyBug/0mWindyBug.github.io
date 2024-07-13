@@ -181,7 +181,7 @@ typedef struct _FLT_CONTEXT_REGISTRATION {
   PVOID                          Reserved1;
 } FLT_CONTEXT_REGISTRATION, *PFLT_CONTEXT_REGISTRATION;
 ```
-The ```ContextCleanupCallback``` is called right before the context goes away ,  neccassery for releasing internal context resources <br/> 
+The ```ContextCleanupCallback``` is called right before the context goes away ,  useful for releasing internal context resources <br/> 
 
 
 ## The cache manager (Cc) & memory manager (Mm)
