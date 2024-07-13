@@ -113,8 +113,8 @@ author:
       icon: "fab fa-fw fa-github"
       url: "https://github.com/0mWindyBug"
 
-# Site Author
-author:
+# Co Author
+co_author:
   name             : "eversinc"
   avatar           : "/images/avatar.png"
   bio              : "Windows Internals & Driver Development"
