@@ -144,9 +144,20 @@ typedef struct _FLT_CALLBACK_DATA {
 ``` CompletionContext ``` -> context to pass to the post operation routine. <br/>
 
 
-#### what can you return from your filters (return value) 
+#### Minifilter contexts 
+A context is a structure that is defined by the minifilter driver and that can be associated with a filter manager object.<br/>
+The filter manager provides support that allows minifilter drivers to associate contexts with objects to preserve state across I/O operations.<br/>
+Contexts are extremley useful , and can be attached to the following objects : <br/>
+    * Files 
+    * Instances
+    * Streams 
+    * Stream Handles (File Objects...)
+    * Transactions 
+    * Volumes 
+    
+depending on the file system there are certian limitations for attaching contexts , e.g The NTFS and FAT file systems do not support file, stream, or file object contexts on paging files, in the pre-create or post-close path, or for IRP_MJ_NETWORK_QUERY_OPEN operations. <br/>
+A minifilter can call ```FltSupports*Contexts``` to check if contexts are supported on a given file object.<br/>
 
-#### minifilter contexts 
 
 ## The cache manager (Cc) & memory manager (Mm)
 
