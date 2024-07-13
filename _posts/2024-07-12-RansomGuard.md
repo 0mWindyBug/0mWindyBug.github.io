@@ -67,7 +67,8 @@ It's important to note that easy to write does not mean easy to design , which r
 
 
 ## Filtering file-system opertions 
-a minifilter calls ```FltRegisterFilter``` , passing a ```FLT_REGISTRATION``` structure : 
+Whilst familarity with the filter manager is somewhat neccassery for the rest of the article , I'll  try to provide a brief summary of the basics, otherwise MSDN is your friend <br/>
+In order to tell the filter manager what filter to register , a minifilter calls ```FltRegisterFilter``` , passing the ```FLT_REGISTRATION``` structure : <br/>
 ``` cpp
 typedef struct _FLT_REGISTRATION {
   USHORT                                      Size;
@@ -88,7 +89,19 @@ typedef struct _FLT_REGISTRATION {
   PFLT_SECTION_CONFLICT_NOTIFICATION_CALLBACK SectionNotificationCallback;
 } FLT_REGISTRATION, *PFLT_REGISTRATION;
 ```
-
+we will discuss some of it's member later on , for now let's look at the ```OperationRegistration``` field , of type ```FLT_OPERATION_REGISTRATION``` <br/>
+``` cpp
+typedef struct _FLT_OPERATION_REGISTRATION {
+  UCHAR                            MajorFunction;
+  FLT_OPERATION_REGISTRATION_FLAGS Flags;
+  PFLT_PRE_OPERATION_CALLBACK      PreOperation;
+  PFLT_POST_OPERATION_CALLBACK     PostOperation;
+  PVOID                            Reserved1;
+} FLT_OPERATION_REGISTRATION, *PFLT_OPERATION_REGISTRATION;
+```
+```MajorFunction``` is the operation to filter on (e.g for filtering file reads -> IRP_MJ_READ) <br/>
+``` Flags ``` a bitmask of flags specifying when to call the preoperation and postoperation filters ( e.g don't call for paging I/O)
+``` PreOperation ``` The routine to called before the operation , of type 
 #### what can you return from your filters (return value) 
 
 #### minifilter contexts 
