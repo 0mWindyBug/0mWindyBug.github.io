@@ -1,5 +1,5 @@
 ---
-title:  "RansomGuard : writing an anti-ransomware filter driver"
+title:  "RansomGuard :  an anti-ransomware filter driver"
 date:   2024-07-12
 tags: [posts]
 excerpt: "Anti Ransomware minifilter driver"
@@ -60,12 +60,12 @@ double utils::CalculateEntropy(PVOID Buffer, size_t Size)
 
 
 
+## The beauty of the filter manager 
+the filter manager provides a level of abstraction to us ,  file-system filter drivers developers , allowing to invest more time into the actual logic of the filter rather than spending time writing a body of "boiler plate" code <br />
+and speaking of boiler plate code , writing a legacy file-system filter driver that ** does nothing ** takes 6,000 lines of code. 
+Thus, the ultimate solution to the problem was to create a comprehensive “framework” for writing file system filter drivers.<br /> The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys) , and consumers of the framework plug in as “Minifilters”. This single legacy filter would be serve as a universal file system Filter Manager.<br /> As I/O requests arrive at the Filter Manager legacy filter Device Object, Filter Manager calls the Minifilters using a call out model.<br /> After each Minifilter processes the request, Filter Manager then calls through to the next Device Object in the Device Stack. <br />
+It's important to note that easy to write does not mean easy to design , which remains a fairly complex task with minifilters , depending on it's purpose , but it makes it possible to go from design to a working filter in weeks rather than months, which is great. <br />
 
- 
-## The filter manager 
-
-
-#### What is it , why is it so handy 
 
 #### what can you filter on ? (+Close vs Cleaanup here) 
 
