@@ -104,7 +104,7 @@ analytics:
 
 # Site Author
 author:
-  name             : "Dor Gerson"
+  name             : "Windy Bug"
   avatar           : "/images/avatar.png"
   bio              : "Windows Internals & Driver Development"
   twitter          : "0mWindyBug"
@@ -112,6 +112,7 @@ author:
     - label: "GitHub"
       icon: "fab fa-fw fa-github"
       url: "https://github.com/0mWindyBug"
+
 # Site Footer
 footer:
   links:
