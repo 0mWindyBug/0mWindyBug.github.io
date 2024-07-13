@@ -60,14 +60,33 @@ double utils::CalculateEntropy(PVOID Buffer, size_t Size)
 
 
 
-## The beauty of the filter manager 
-the filter manager provides a level of abstraction to us ,  file-system filter drivers developers , allowing to invest more time into the actual logic of the filter rather than spending time writing a body of "boiler plate" code <br />
-and speaking of boiler plate code , writing a legacy file-system filter driver that ** does nothing ** takes 6,000 lines of code. 
+## The filter manager 
+the filter manager provides a level of abstraction allowing us  to invest more time into the actual logic of the filter rather than spending time writing a body of "boiler plate" code, and speaking of boiler plate code , writing a legacy file-system filter driver that ** does nothing ** takes 6,000 lines of code. 
 Thus, the ultimate solution to the problem was to create a comprehensive “framework” for writing file system filter drivers.<br /> The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys) , and consumers of the framework plug in as “Minifilters”. This single legacy filter would be serve as a universal file system Filter Manager.<br /> As I/O requests arrive at the Filter Manager legacy filter Device Object, Filter Manager calls the Minifilters using a call out model.<br /> After each Minifilter processes the request, Filter Manager then calls through to the next Device Object in the Device Stack. <br />
 It's important to note that easy to write does not mean easy to design , which remains a fairly complex task with minifilters , depending on it's purpose , but it makes it possible to go from design to a working filter in weeks rather than months, which is great. <br />
 
 
-#### what can you filter on ? (+Close vs Cleaanup here) 
+## Filtering file-system opertions 
+a minifilter calls ```FltRegisterFilter``` , passing a ```FLT_REGISTRATION``` structure which maps as below : 
+``` typedef struct _FLT_REGISTRATION {
+  USHORT                                      Size;
+  USHORT                                      Version;
+  FLT_REGISTRATION_FLAGS                      Flags;
+  const FLT_CONTEXT_REGISTRATION              *ContextRegistration;
+  const FLT_OPERATION_REGISTRATION            *OperationRegistration;
+  PFLT_FILTER_UNLOAD_CALLBACK                 FilterUnloadCallback;
+  PFLT_INSTANCE_SETUP_CALLBACK                InstanceSetupCallback;
+  PFLT_INSTANCE_QUERY_TEARDOWN_CALLBACK       InstanceQueryTeardownCallback;
+  PFLT_INSTANCE_TEARDOWN_CALLBACK             InstanceTeardownStartCallback;
+  PFLT_INSTANCE_TEARDOWN_CALLBACK             InstanceTeardownCompleteCallback;
+  PFLT_GENERATE_FILE_NAME                     GenerateFileNameCallback;
+  PFLT_NORMALIZE_NAME_COMPONENT               NormalizeNameComponentCallback;
+  PFLT_NORMALIZE_CONTEXT_CLEANUP              NormalizeContextCleanupCallback;
+  PFLT_TRANSACTION_NOTIFICATION_CALLBACK      TransactionNotificationCallback;
+  PFLT_NORMALIZE_NAME_COMPONENT_EX            NormalizeNameComponentExCallback;
+  PFLT_SECTION_CONFLICT_NOTIFICATION_CALLBACK SectionNotificationCallback;
+} FLT_REGISTRATION, *PFLT_REGISTRATION;
+``` 
 
 #### what can you return from your filters (return value) 
 
