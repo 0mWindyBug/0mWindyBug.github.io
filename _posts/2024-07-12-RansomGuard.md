@@ -1,4 +1,6 @@
 ---
+author: Windy Bug
+author: eversinc
 title:  "RansomGuard :  an anti-ransomware filter driver"
 date:   2024-07-12
 tags: [posts]
