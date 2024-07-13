@@ -109,6 +109,18 @@ FLT_PREOP_CALLBACK_STATUS PfltPreOperationCallback(
   [out]     PVOID *CompletionContext
 )
 ```
+``` PostOperation ``` -> The routine to be called after the operation took place , with the following prototype: <br/>
+```cpp
+PFLT_POST_OPERATION_CALLBACK PfltPostOperationCallback;
+
+FLT_POSTOP_CALLBACK_STATUS PfltPostOperationCallback(
+  [in, out]      PFLT_CALLBACK_DATA Data,
+  [in]           PCFLT_RELATED_OBJECTS FltObjects,
+  [in, optional] PVOID CompletionContext,
+  [in]           FLT_POST_OPERATION_FLAGS Flags
+)
+```
+
 where : <br/>
 ``` Data ``` -> A pointer to the callback data structure for the I/O operation : <br/>
 ``` cpp
@@ -130,7 +142,7 @@ typedef struct _FLT_CALLBACK_DATA {
 ```
 ``` FltObjects ``` -> A pointer to an FLT_RELATED_OBJECTS structure that contains opaque pointers for the objects related to the current I/O request. <br/>
 ``` CompletionContext ``` -> context to pass to the post operation routine. <br/>
-``` PostOperation ``` -> The routine to be called after the operation took place. <br/>
+
 
 #### what can you return from your filters (return value) 
 
