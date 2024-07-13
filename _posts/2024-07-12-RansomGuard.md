@@ -67,8 +67,8 @@ It's important to note that easy to write does not mean easy to design , which r
 
 
 ## Filtering file-system opertions 
-Whilst familarity with the filter manager is somewhat neccassery for the rest of the article , I'll  try to provide a brief summary of the basics, otherwise MSDN is your friend <br/>
-In order to tell the filter manager what filter to register , a minifilter calls ```FltRegisterFilter``` , passing the ```FLT_REGISTRATION``` structure : <br/>
+Whilst familarity with the filter manager is somewhat neccassery for the rest of the article , I'll  try to provide a brief summary of the basics, otherwise MSDN is your friend. <br/>
+In order to tell the filter manager what filters to register , a minifilter calls ```FltRegisterFilter``` , passing the ```FLT_REGISTRATION``` structure : <br/>
 ``` cpp
 typedef struct _FLT_REGISTRATION {
   USHORT                                      Size;
@@ -99,9 +99,39 @@ typedef struct _FLT_OPERATION_REGISTRATION {
   PVOID                            Reserved1;
 } FLT_OPERATION_REGISTRATION, *PFLT_OPERATION_REGISTRATION;
 ```
-```MajorFunction``` is the operation to filter on (e.g for filtering file reads -> IRP_MJ_READ) <br/>
-``` Flags ``` a bitmask of flags specifying when to call the preoperation and postoperation filters ( e.g don't call for paging I/O)
-``` PreOperation ``` The routine to called before the operation , of type 
+```MajorFunction``` -> is the operation to filter on (e.g for filtering file reads -> IRP_MJ_READ). <br/>
+``` Flags ``` -> a bitmask of flags specifying when to call the preoperation and postoperation filters ( e.g don't call for paging I/O). <br/>
+``` PreOperation ```  -> The routine to be called before the operation takes place , with the following prototype: <br/>
+```cpp
+FLT_PREOP_CALLBACK_STATUS PfltPreOperationCallback(
+  [in, out] PFLT_CALLBACK_DATA Data,
+  [in]      PCFLT_RELATED_OBJECTS FltObjects,
+  [out]     PVOID *CompletionContext
+)
+```
+where : 
+``` Data ``` -> A pointer to the callback data structure for the I/O operation : <br/>
+``` cpp
+typedef struct _FLT_CALLBACK_DATA {
+  FLT_CALLBACK_DATA_FLAGS     Flags;
+  PETHREAD                    Thread;
+  PFLT_IO_PARAMETER_BLOCK     Iopb;
+  IO_STATUS_BLOCK             IoStatus;
+  struct _FLT_TAG_DATA_BUFFER *TagData;
+  union {
+    struct {
+      LIST_ENTRY QueueLinks;
+      PVOID      QueueContext[2];
+    };
+    PVOID FilterContext[4];
+  };
+  KPROCESSOR_MODE             RequestorMode;
+} FLT_CALLBACK_DATA, *PFLT_CALLBACK_DATA;
+```
+``` FltObjects ``` -> A pointer to an FLT_RELATED_OBJECTS structure that contains opaque pointers for the objects related to the current I/O request. <br/>
+``` CompletionContext ``` -> context to pass to the post operation routine. <br/>
+``` PostOperation ``` -> The routine to be called after the operation took place. <br/>
+
 #### what can you return from your filters (return value) 
 
 #### minifilter contexts 
