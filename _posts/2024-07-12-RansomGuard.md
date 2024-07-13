@@ -159,8 +159,29 @@ Depending on the file system there are certian limitations for attaching context
 A minifilter can call ```FltSupports*Contexts``` to check if a context type is supported on a given file object.<br/>
 
 #### Context managment 
-The filter manager uses reference counting to manage the lifetime of a minifilter context , whenever a context is successfully created,  it is initialized with reference count of one. </br>
+The filter manager uses reference counting to manage the lifetime of a minifilter context , whenever a context is successfully created,  it is initialized with reference count of one. <br/>
 Whenever a context is referenced, for example by a successful context set or get, the filter manager increments the reference count of the context by one. When a context is no longer needed, its reference count must be decremented. A positive reference count means that the context is usable,  When the reference count becomes zero, the context is unusable, and the filter manager eventually frees it. </br> 
+Context management is probably one of the most frustrating parts of maintaining a minifilter, your unload hangs ? it's often down to incorrect context managment. this is one (of many) reasons to why you should always enable driver verifier , more on this later : ) <br/>
+Lastly , note the filter manager is the one responsible for derefencing the Set* reference , not the minifilter - but when ? <br/>
+Thanks to the brilliant Rod Widdowson , these are the conditions : <br/>
+- The attached to system structure is about to go away. For example, when the file system calls FsRtlTeardownPer StreamContexts as part of tearing down the FCB, the Filter Manager will detach any attached stream contexts and dereference them.</br>
+- The filter instance associated with the context is being detached.  Again taking the stream context example, during instance teardown after the InstanceTeardown callbacks have been made the filter manager will detach any stream contexts associated with this instance from their associated ADVANCED_FCB_HEADER and dereference them. <br/>
+
+#### Context registration 
+A minifilter passes the following structure to FltRegisterFilter to register context types <br/>
+``` cpp
+typedef struct _FLT_CONTEXT_REGISTRATION {
+  FLT_CONTEXT_TYPE               ContextType;
+  FLT_CONTEXT_REGISTRATION_FLAGS Flags;
+  PFLT_CONTEXT_CLEANUP_CALLBACK  ContextCleanupCallback;
+  SIZE_T                         Size;
+  ULONG                          PoolTag;
+  PFLT_CONTEXT_ALLOCATE_CALLBACK ContextAllocateCallback;
+  PFLT_CONTEXT_FREE_CALLBACK     ContextFreeCallback;
+  PVOID                          Reserved1;
+} FLT_CONTEXT_REGISTRATION, *PFLT_CONTEXT_REGISTRATION;
+```
+The ```ContextCleanupCallback``` is called right before the context goes away ,  neccassery for releasing internal context resources <br/> 
 
 
 ## The cache manager (Cc) & memory manager (Mm)
