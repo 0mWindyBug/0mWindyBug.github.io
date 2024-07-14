@@ -184,7 +184,39 @@ typedef struct _FLT_CONTEXT_REGISTRATION {
 The ```ContextCleanupCallback``` is called right before the context goes away ,  useful for releasing internal context resources <br/> 
 
 
-## The cache manager (Cc) & memory manager (Mm)
+## The NT cache manager 
+The windows cache manager is a software-only component which is closely integrated with the windows memory manager , to make file-system data accessible within the virtual memory system <br/>
+Although constant advances in storage technologies have led to faster and
+cheaper secondary storage devices, accessing data off secondary storage media is
+still much slower than accessing data buffered in system memory, so it becomes important to have data
+brought into system memory before it is accessed (read-ahead functionality), to
+retain such information in memory until it is no longer needed (caching of data),
+and possibly to defer writing of modified data to disk to obtain greater efficiency
+(write-behind or delayed-write functionality (implemened by the lazy writer).<br/>
+
+## Cached write operation 
+Now , consider a write operation initiated by a user application , let's walkthrough the steps and see where the cache manager is involved.<br/>
+1. The user application initiates a write operation, which causes control to be
+transferred to the I/O Manager in the kernel.<br/>
+2. The I/O Manager directs the write request to the appropriate file system
+driver using an IRP. the buffer may be mapped to system space , or an mdl may be created or the virtual address of the buffer may be directly passed <br/>
+3. The file-system driver recivies the IRP , as long as the operation is buffered (FILE_FLAG_NO_BUFFERING was not passed to CreateFile) , if caching has not yet been initiated for this file, the file system driver initiates caching of the file by invoking the Cache Manager(Cc). The Virtual Memory Manager (Mm) creates a file mapping (section object) for the file to be cached.<br/>
+4. The file system driver simply passes on the write request to the cache manager via ```CcCopyWrite``` <br/>
+5. The cache manager examines its data structures to determine whether there is a mapped view for the file containing the range of bytes being modified by the user. If no such mapped view exists, the cache manager creates a
+mapped view for the file region <br/>
+6. The cache manager performs a memory copy operation from the user's buffer to the virtual address range associated with the mapped view for the file. <br/>
+7. If the virtual address range is not backed by physical pages, a page faul toccurs and control is transferred to the VMM. <br/>
+8. The VMM allocates physical pages, which will be used to contain the requested data <br/>
+9. The cache manager completes the copy operation from the user's buffer to the virtual address range associated with the mapped view for the file <br/>
+10. The cache manager returns control to the file system driver. The user data is now resident in system memory and has not yet been written to storage. So when is the data actually transfered to storage ? the Cc's lazy writer is responsible to decrease the window in which the cache is dirty by writing cached data back to storage , it coordinates with the mapped page writer thread of the Mm which is responsible to write dirty mapped pages back to storage whenever a certian threshold is met (there's also the modified page writer which shares similar responsbility , with pagefiles). <br/> The noncached write to storage may be initiated by either of them <br/>  
+11. The file system driver completes the original IRP sent to it by the I/O manager and the I/O manager completes the original user write request <br/> 
+
+Why should we care ? it's important to keep caching in mind before we think about the design of a file-system filter. <br/>
+
+
+
+
+
 
 #### what is the cache manager ? why do we care ? 
 
