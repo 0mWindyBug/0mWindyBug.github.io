@@ -220,6 +220,14 @@ Again , keep these in mind : )
 
 
 ## Ransomware variations 
+We have to consider all the variants of the encryption process, It can happen very differently. 
+The most popular variation is where
+the files are opened in R/W, read and encrypted in place, closed, and then renamed. <br/> Another option is leveraging memory mapped files and letting the system process initiate the actual write, this trick alonse was enough for ransomwares like Maze to evade certian Anti Viruses's Anti Ransomware components <br/>. Another way could be creating  a copy of the file with the new name ,  opened in W, the original file is read, its encrypted content is written inside and the original file is deleted.<br/>
+
+
+
+
+
  
 1. CreateFile -> ReadFile -> (encrypt buffer) -> WriteFile -> CloseFile
 2. CreateFile -> CreateFileMapping -> MapViewOfFile -> memcpy to view
