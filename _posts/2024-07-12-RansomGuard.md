@@ -227,7 +227,10 @@ Yet another way could be creating a copy of the file with the new name , opened 
 Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly  implemented in ransomwares in the wild. <br/>
 
 ## Driver Verifier 
-Before starting to write our driver , let's talk about verifier briefly. <br/>
+Before starting to write our driver , let's talk about verifier briefly. <br/> Driver Verifier can subject Windows drivers to a variety of stresses and tests to find improper behavior. You can configure which tests to run, which allows you to put a driver through heavy stress loads and enforce edge cases. <br/>
+For example , .<br/>
+Enabling verifier during the development process is extremley important for writing a quality driver, note that when writing a minifilter you should enable it for both your driver and the fltmgr. <br/>
+
 
 ## Tracking & Evaluating operations using the same FileObject  
 
