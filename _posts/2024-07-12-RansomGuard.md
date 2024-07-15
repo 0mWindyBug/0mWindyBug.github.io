@@ -222,8 +222,9 @@ Again , keep these in mind : )
 ## Ransomware variations 
 We have to consider all the variants of the encryption process, as it can happen very differently. <br/>
 The most popular variation is where
-the files are opened in R/W, read and encrypted in place, closed, and then (optionally) renamed. <br/> Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it can be more evasive as the write is initiated by the system process rather than the malicious one. <br/> This trick alone was enough for Maze and other ransomware families to evade security solutions<br/>. Yet another way could be creating a copy of the file with the new name , opened for W, the original file is read, its encrypted content is written inside and the original file is deleted.<br/>
-Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly  seen in ransomwares in the wild. <br/>
+the files are opened in R/W, read and encrypted in place, closed, and then (optionally) renamed. <br/> Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it can be more evasive as the write is initiated by the system process rather than the malicious one. <br/> This trick alone was enough for Maze and other ransomware families to evade security solutions. <br/>
+Yet another way could be creating a copy of the file with the new name , opened for W, the original file is read, its encrypted content is written inside and the original file is deleted.<br/>
+Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly  implemented in ransomwares in the wild. <br/>
 
 ## Driver Verifier 
 Before starting to write our driver , let's talk about verifier briefly. <br/>
