@@ -6,9 +6,9 @@ excerpt: "Anti Ransomware minifilter driver"
 ---
 
 ## Intro
-Ransomware is one of the most simple - yet significant threats facing organizations today. <br />
-Unsuprisingly , the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it -  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat <br /> 
-This blogpost is going to walkthrough the  design of RansomGuard - a fun open source anti-ransomware minifilter driver we developed, as well as covering some required internals . <br />
+Ransomware is one of the most simple - yet significant threats facing organizations today.<br />
+Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it -  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat.<br /> 
+Today's blogpost is going to walkthrough the  design of RansomGuard - a fun open source anti-ransomware filter driver we developed, as well as covering the required internals.<br />
 
 
 ## Entropy 
