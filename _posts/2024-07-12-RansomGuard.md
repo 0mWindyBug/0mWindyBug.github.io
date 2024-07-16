@@ -225,15 +225,29 @@ We have to consider all the variants of the encryption process, as it can happen
 The most popular variation is where
 the files are opened in R/W, read and encrypted in place, closed, and then (optionally) renamed. <br/> Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it can be more evasive as the write is initiated by the system process rather than the malicious one. <br/> This trick alone was enough for Maze and other ransomware families to evade security solutions. <br/>
 Yet another way could be creating a copy of the file with the new name , opened for W, the original file is read, its encrypted content is written inside and the original file is deleted.<br/>
-Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly  implemented in ransomwares in the wild. <br/>
+Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly  implemented in ransomwares in the wild. <br/> 
 
 ## Driver Verifier 
 Before starting to write our driver , let's talk about verifier briefly. <br/> Driver Verifier can subject Windows drivers to a variety of stresses and tests to find improper behavior. You can configure which tests to run, which allows you to put a driver through heavy stress loads and enforce edge cases. <br/>
 For example , .<br/>
 Enabling verifier during the development process is extremley important for writing a quality driver, note that when writing a minifilter you should enable it for both your driver and the fltmgr. <br/>
 
+## Detecting encryption 
+We already mentioned entropy as a measure to identify encryption of data, what we also mentioned is the fact compressed data tends to have high entropy.<br/>
+Based on statistical tests with a large set of files of different types, we came up with the following measurement, that takes into consideration the initial entropy of the file.<br/>
+.... show is encrypted function...<br/>
+We found 0.83 as the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
+As we increase the value of the coefficient the difference between the initial entropy value and the final entropy value to be considered suspicious increases. <br/>
 
 ## Tracking & Evaluating operations using the same FileObject  
+To identify encryption has taken place we need to collect two datapoints.<br/>
+First, that represents the initial entropy of the contents of the file, and second that represents the entropy of the contents of the file after modifcation.<br/> 
+There a few things to consider:<br/>
+1. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
+2. A file may be truncated when opened , consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
+
+Considering #1 , the final state of the file is captured when the file is closed.
+Considering #2, we will monitor file opens with FILE_SUPERSEDE |... , in such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
 
 #### Design diagram 
 
