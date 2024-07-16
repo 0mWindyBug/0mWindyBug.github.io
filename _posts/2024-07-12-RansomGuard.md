@@ -246,8 +246,10 @@ There a few things to consider:<br/>
 1. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
 2. A file may be truncated when opened , consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
 
-Considering #1 , the final state of the file is captured when the file is closed.
-Considering #2, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of FILE_SUPERSEDE , FILE_OVERWRITE or FILE_OVERWRITE_IF, in such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
+Considering #1 , the final state of the file is captured when the file is closed.<br/>
+Considering #2, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of FILE_SUPERSEDE , FILE_OVERWRITE or FILE_OVERWRITE_IF. in such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
+
+
 
 #### Design diagram 
 
