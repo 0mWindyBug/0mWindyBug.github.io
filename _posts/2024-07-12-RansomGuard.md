@@ -252,7 +252,7 @@ Considering #2, we will monitor file opens that may truncate the file, indicated
 
 #### Close vs Cleanup
 IRP_MJ_CLEANUP is sent whenever the last handle to a file object is closed (represents the usermode state), in contrast IRP_MJ_CLOSE is sent whenever the last reference is released from the file object (represents the system state). <br/>
-Any I/O operations (excluding pagikg I/O and IRP_MJ_QUERY_INFORMATION) are illegal after cleanup has completed, so it's safe to assume the file will not be modified after the handle is closed by the user, hence we are going to use PostCleanup as our second datapoint<br/>.
+Any I/O operations (excluding paging I/O , IRP_MJ_QUERY_INFORMATION and apparently reads) are illegal after cleanup has completed, so it's safe to assume the file will not be modified after the handle is closed by the user, hence we are going to use PostCleanup as our second datapoint<br/>.
 
 
 
