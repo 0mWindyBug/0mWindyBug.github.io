@@ -1,4 +1,5 @@
----
+
+ ---
 title:  "RansomGuard :  an anti-ransomware filter driver"
 date:   2024-07-12
 tags: [posts]
@@ -229,7 +230,7 @@ Whilst there are other possiblities , we are going to tackle those 3 as they are
 
 ## Driver Verifier 
 Before starting to write our driver , let's talk about verifier briefly. <br/> Driver Verifier can subject Windows drivers to a variety of stresses and tests to find improper behavior. You can configure which tests to run, which allows you to put a driver through heavy stress loads and enforce edge cases. <br/>
-For example , .<br/>
+For a detailed description regarding the various checks avaliable , visit - (OSR link).<br/>
 Enabling verifier during the development process is extremley important for writing a quality driver, note that when writing a minifilter you should enable it for both your driver and the fltmgr. <br/>
 
 ## Detecting encryption 
@@ -250,9 +251,13 @@ Considering #1 , the final state of the file is captured when the file is closed
 Considering #2, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of FILE_SUPERSEDE , FILE_OVERWRITE or FILE_OVERWRITE_IF. in such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
 
 #### Close vs Cleanup
-explain th difference and why do we filter cleanup.<br/>
+IRP_MJ_CLEANUP is sent whenever the last handle to a file object is closed (represents the usermode state), in contrast IRP_MJ_CLOSE is sent whenever the last reference is released from the file object (represents the system state). <br/>
+Any I/O operations (excluding pagikg I/O and IRP_MJ_QUERY_INFORMATION) are illegal after cleanup has completed, so it's safe to assume the file will not be modified after the handle is closed by the user, hence we are going to use PostCleanup as our second datapoint<br/>.
+
+
 
 #### Design diagram 
+
 
 #### per - filter description (what does it filter, role , code etc...) 
 
