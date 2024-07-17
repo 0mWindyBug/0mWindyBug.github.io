@@ -1,10 +1,10 @@
 
---
+---
 title:  "RansomGuard :  an anti-ransomware filter driver"
 date:   2024-07-12
 tags: [posts]
 excerpt: "Anti Ransomware minifilter driver"
---
+---
 
 ## Intro
 Ransomware is one of the most simple - yet significant threats facing organizations today.<br />
