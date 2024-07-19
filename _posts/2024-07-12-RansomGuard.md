@@ -240,43 +240,18 @@ Based on statistical tests with a large set of files of different types, we came
 We found 0.83 as the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
 As we increase the value of the coefficient the difference between the initial entropy value and the final entropy value to be considered suspicious increases. <br/>
 
-## Tracking & Evaluating operations performed on the same FileObject  
+## Tracking & Evaluating file handles   
 To identify encryption has taken place we need to collect two datapoints.<br/>
 First, that represents the initial entropy of the contents of the file, and second that represents the entropy of the contents of the file after modifcation.<br/> 
 There a few things to consider:<br/>
-1. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
-2. A file may be truncated when opened , consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
-
-Considering #1 , the final state of the file is captured when the file handle is closed. more on this shortly.<br/>
-Considering #2, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of FILE_SUPERSEDE , FILE_OVERWRITE or FILE_OVERWRITE_IF. in such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
-To maintain state between operations , we will use a FileObject (aka Stream Handle) context with the following structure :<br/> 
-```cpp
-typedef struct _HandleContext
-{
-	PFLT_FILTER Filter;
-	PFLT_INSTANCE Instance;
-	UNICODE_STRING FileName;
-	UNICODE_STRING FinalComponent;
-	ULONG RequestorPid;
-	bool WriteOccured;
-	double PreEntropy;
-	double PostEntropy;
-	PVOID OriginalContent;
-	ULONG InitialFileSize;
-	PVOID PoolPtr;
-	bool SavedContent;
-}HandleContext, * pHandleContext;
-```
-
-
-
-#### Close vs Cleanup
-IRP_MJ_CLEANUP is sent whenever the last handle to a file object is closed (represents the usermode state), in contrast IRP_MJ_CLOSE is sent whenever the last reference is released from the file object (represents the system state). <br/>
+1. A file may be truncated when opened , consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
+2. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
+Considering #1, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of FILE_SUPERSEDE , FILE_OVERWRITE or FILE_OVERWRITE_IF. in such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
+Considering #2 , the post modification state of the file is captured whenever whenever IRP_MJ_CLEANUP is sent.<br/>
+that is, whenever the last handle to a file object is closed (represents the usermode state), in contrast IRP_MJ_CLOSE is sent whenever the last reference is released from the file object (represents the system state). <br/>
 Any I/O operations (excluding paging I/O , IRP_MJ_QUERY_INFORMATION and apparently reads) are illegal after cleanup has completed, so it's safe to assume the file will not be modified (again , excluding paging I/O - we will deal with that later)  after the handle is closed by the user, hence we are going to use post cleanup as our second datapoint<br/>.
-
-
-#### Design diagram 
-
+Having said that , the following diagram describes RansomGuard's design for evaluating operations across the same handle.<br/>
+![RansomGuardDesign](https://github.com/user-attachments/assets/c2f04897-2827-4c06-bfb4-80353a5e45fb)
 
 #### per - filter description (what does it filter, role , code etc...) 
 
