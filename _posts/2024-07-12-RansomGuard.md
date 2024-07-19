@@ -251,7 +251,7 @@ Considering #2 , the post modification state of the file is captured whenever wh
 that is, whenever the last handle to a file object is closed (represents the usermode state), in contrast IRP_MJ_CLOSE is sent whenever the last reference is released from the file object (represents the system state). <br/>
 Any I/O operations (excluding paging I/O , IRP_MJ_QUERY_INFORMATION and apparently reads) are illegal after cleanup has completed, so it's safe to assume the file will not be modified (again , excluding paging I/O - we will deal with that later)  after the handle is closed by the user, hence we are going to use post cleanup as our second datapoint.<br/>
 The following diagram summerizes RansomGuard's design for evaluating operations across the same handle.<br/>
-![RansomGuardDesign](https://github.com/user-attachments/assets/c2f04897-2827-4c06-bfb4-80353a5e45fb)
+<img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
 Next , let's walkthrough each filter to elaborate on design decisions and the implemntation. <br/> 
 
