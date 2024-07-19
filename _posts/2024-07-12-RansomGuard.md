@@ -249,9 +249,141 @@ There a few things to consider:<br/>
 Considering #1, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of FILE_SUPERSEDE , FILE_OVERWRITE or FILE_OVERWRITE_IF. in such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
 Considering #2 , the post modification state of the file is captured whenever whenever IRP_MJ_CLEANUP is sent.<br/>
 that is, whenever the last handle to a file object is closed (represents the usermode state), in contrast IRP_MJ_CLOSE is sent whenever the last reference is released from the file object (represents the system state). <br/>
-Any I/O operations (excluding paging I/O , IRP_MJ_QUERY_INFORMATION and apparently reads) are illegal after cleanup has completed, so it's safe to assume the file will not be modified (again , excluding paging I/O - we will deal with that later)  after the handle is closed by the user, hence we are going to use post cleanup as our second datapoint<br/>.
-Having said that , the following diagram describes RansomGuard's design for evaluating operations across the same handle.<br/>
+Any I/O operations (excluding paging I/O , IRP_MJ_QUERY_INFORMATION and apparently reads) are illegal after cleanup has completed, so it's safe to assume the file will not be modified (again , excluding paging I/O - we will deal with that later)  after the handle is closed by the user, hence we are going to use post cleanup as our second datapoint.<br/>
+The following diagram summerizes RansomGuard's design for evaluating operations across the same handle.<br/>
 ![RansomGuardDesign](https://github.com/user-attachments/assets/c2f04897-2827-4c06-bfb4-80353a5e45fb)
+
+Next , let's walkthrough each filter to elaborate on design decisions and the implemntation. <br/> 
+
+### filters::PreCreate 
+Generally speaking , the PreCreate filter is responsible to filter out any uninteresting I/O requests. For now , we are only interested in 
+file opens for R/W from usermode (so yes , not filtering new files , altough that's going to change later on in the blogpost). <br/>
+In addition , as we've discussed earlier this is our only chance to capture the initial state of truncated files , if the file might get truncated - we read the file , calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.<br/>
+```cpp
+FLT_PREOP_CALLBACK_STATUS
+filters::PreCreate(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+)
+{
+	UNREFERENCED_PARAMETER(CompletionContext);
+
+	ULONG FileSize = 0;
+	ULONG_PTR stackLow;
+	ULONG_PTR stackHigh;
+	NTSTATUS status;
+	PFILE_OBJECT FileObject = Data->Iopb->TargetFileObject;
+
+	// block any file-system access by malicious processes or to our restore directory 
+	ProcessesListMutex.Lock();
+	pProcess ProcessInfo = processes::GetProcessEntry(FltGetRequestorProcessId(Data));
+	if (ProcessInfo)
+	{
+		if (ProcessInfo->Malicious)
+		{
+			ProcessesListMutex.Unlock();
+			DbgPrint("[*] blocked malicious process from file-system access\n");
+			Data->IoStatus.Status = STATUS_ACCESS_DENIED;
+			Data->IoStatus.Information = 0;
+			return FLT_PREOP_COMPLETE;
+		}
+
+	}
+	ProcessesListMutex.Unlock();
+
+	// block any usermode access to the restore directory 
+	FilterFileNameInformation FileNameInfo(Data);
+	if (!FileNameInfo.Get())
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	status = FileNameInfo.Parse();
+	if (!NT_SUCCESS(status))
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+
+	
+	if (restore::IsRestoreParentDir(FileNameInfo->ParentDir) && Data->RequestorMode == UserMode)
+	{
+		DbgPrint("[*] blocked usermode access to the restore directory\n");
+		Data->IoStatus.Status = STATUS_ACCESS_DENIED;
+		Data->IoStatus.Information = 0;
+		return FLT_PREOP_COMPLETE;
+	}
+
+
+	//  Stack file objects are never scanned
+	IoGetStackLimits(&stackLow, &stackHigh);
+
+	if (((ULONG_PTR)FileObject > stackLow) &&
+		((ULONG_PTR)FileObject < stackHigh)) 
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	//  Directory opens don't need to be scanned.
+	if (FlagOn(Data->Iopb->Parameters.Create.Options, FILE_DIRECTORY_FILE))
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	//  Skip pre-rename operations which always open a directory.
+	if (FlagOn(Data->Iopb->OperationFlags, SL_OPEN_TARGET_DIRECTORY))
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	//  Skip paging files.
+	if (FlagOn(Data->Iopb->OperationFlags, SL_OPEN_PAGING_FILE)) 
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	//  Skip scanning DASD opens 
+	if (FlagOn(FltObjects->FileObject->Flags, FO_VOLUME_OPEN)) 
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	// Skip kernel mode or non write requests
+	const auto& params = Data->Iopb->Parameters.Create;
+	if (Data->RequestorMode == KernelMode
+		|| (params.SecurityContext->DesiredAccess & FILE_WRITE_DATA) == 0 )
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	ULONG Options = params.Options;
+
+	// if file might going to be truncated in post create try to read it now
+	ULONG CreateDisposition = (Options >> 24) & 0x000000ff;
+
+	// we are going to invoke the post callback , so allocate a context to pass information to it 
+	pCreateCompletionContext CreateContx = (pCreateCompletionContext)FltAllocatePoolAlignedWithTag(FltObjects->Instance, NonPagedPool, sizeof(CreateCompletionContext), TAG);
+	if (!CreateContx)
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	CreateContx->PreEntropy = INVALID_ENTROPY;
+	CreateContx->OriginalContent = nullptr;
+	CreateContx->InitialFileSize = 0;
+	CreateContx->SavedContent = false;
+	CreateContx->CalculatedEntropy = false;
+
+	// if file might get truncated 
+	if (CreateDisposition == FILE_OVERWRITE || CreateDisposition == FILE_OVERWRITE_IF || CreateDisposition == FILE_SUPERSEDE)
+	{
+
+		FilterFileNameInformation FileNameInfo(Data);
+		PFLT_FILE_NAME_INFORMATION NameInformation = FileNameInfo.Get();
+		if (!NameInformation)
+		{
+			FltFreePoolAlignedWithTag(FltObjects->Instance, CreateContx, TAG);
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		}
+
+		CreateContx->PreEntropy = utils::CalculateFileEntropyByName(FltObjects->Filter, FltObjects->Instance, &NameInformation->Name, FLT_CREATE_CONTEXT, CreateContx);
+		if (CreateContx->PreEntropy == INVALID_ENTROPY)
+		{
+			FltFreePoolAlignedWithTag(FltObjects->Instance, CreateContx, TAG);
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		}
+
+		CreateContx->CalculatedEntropy = true;
+
+	}
+	*CompletionContext = CreateContx;
+	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
+}
+
+```
 
 #### per - filter description (what does it filter, role , code etc...) 
 
