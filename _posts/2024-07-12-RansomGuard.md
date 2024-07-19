@@ -259,6 +259,11 @@ Next , let's walkthrough each filter to elaborate on design decisions and the im
 Generally speaking , the PreCreate filter is responsible to filter out any uninteresting I/O requests. For now , we are only interested in 
 file opens for R/W from usermode (so yes , not filtering new files , altough that's going to change later on in the blogpost). <br/>
 In addition , as we've discussed earlier this is our only chance to capture the initial state of truncated files , if the file might get truncated - we read the file , calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.<br/>
+Lastly , to enforce access restrictions :
+* The restore directory is accessible only from kernel mode
+* A process marked as malicious(ransomware) is blocked from any file-system access
+<br/>
+  
 ```cpp
 FLT_PREOP_CALLBACK_STATUS
 filters::PreCreate(
