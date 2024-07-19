@@ -389,6 +389,27 @@ filters::PreCreate(
 }
 
 ```
+A process notify routine managed linked list is used to track active processes in the system and maintain process state across different file-system operations, each process described by the following struct : <br/>
+```cpp
+typedef struct _Process
+{
+	ULONG Pid; 
+	ULONG OriginalPid;
+	ULONG ParentPid;
+	PUNICODE_STRING ImagePath; 
+	int FilesEncrypted;
+	LIST_ENTRY* Next;
+	bool Suspicious;
+	bool Malicious;
+	bool Terminated;
+	pSection SectionsOwned;
+	int SectionsCount;
+	Mutex SectionsListLock;
+} Process, * pProcess;
+```
+Ignore some of these fields for now, they will make sense later. <br/>
+Since we use a statistical logic to identify encryption , we set a threshold of encrypted by a process to which we consider it as ransomware, the ```EncryptedFiles``` counter is used for that matter. <br/>
+
 
 #### per - filter description (what does it filter, role , code etc...) 
 
