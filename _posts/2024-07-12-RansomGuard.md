@@ -414,7 +414,26 @@ typedef struct _Process
 Since we use a statistical logic to identify encryption , we set a threshold of encrypted files by a process in which we consider it as ransomware, the ```EncryptedFiles``` counter is used for that matter, the rest of the structure will make sense later on in the blogpost. <br/> 
 
 ### PostCreate 
-Here, if the file is not new (for now) and if the file-system supports FileObject contexts for the given operation(not supported in the paging I/O path) -  we initialize our FileObject context structure and attach it to the FileObject , nothing complex.<br/>
+Here, if the file is not new (for now) and if the file-system supports FileObject contexts for the given operation(not supported in the paging I/O path) -  we initialize our FileObject context structure :
+
+```cpp
+typedef struct _HandleContext
+{
+	PFLT_FILTER Filter;
+	PFLT_INSTANCE Instance;
+	UNICODE_STRING FileName;
+	UNICODE_STRING FinalComponent;
+	ULONG RequestorPid;
+	bool WriteOccured;
+	double PreEntropy;
+	double PostEntropy;
+	PVOID OriginalContent;
+	ULONG InitialFileSize;
+	bool SavedContent;
+}HandleContext, * pHandleContext;
+
+```
+and attach it to the FileObject , nothing complex.<br/>
 
 ```cpp
 FLT_POSTOP_CALLBACK_STATUS
