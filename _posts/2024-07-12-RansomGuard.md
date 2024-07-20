@@ -602,6 +602,44 @@ Again , simply check if the file is monitored and a write has been made, if not 
 
 ```
 
+### PostCleanup 
+At this point the file cannot be modified using the same handle , due to IRQL restrictions capturing the second datapoint must be deferred to a worker thread, this is done by returning FLT_STATUS_MORE_PROCESSING_REQUIRED.<br/>
+
+```cpp
+	pHandleContext HandleContx = (pHandleContext)CompletionContext;
+	if (!HandleContx)
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	if (Flags & FLTFL_POST_OPERATION_DRAINING)
+	{
+		// release get reference from pre close 
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+
+	// continue completion processing asynchronously at passive level 
+	PFLT_DEFERRED_IO_WORKITEM EvalWorkItem = FltAllocateDeferredIoWorkItem();
+	if (!EvalWorkItem)
+	{
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+	NTSTATUS status = FltQueueDeferredIoWorkItem(EvalWorkItem, Data, evaluate::EvaluateHandle, DelayedWorkQueue, reinterpret_cast<PVOID>(HandleContx));
+	if (!NT_SUCCESS(status))
+	{
+		FltFreeDeferredIoWorkItem(EvalWorkItem);
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+	return FLT_POSTOP_MORE_PROCESSING_REQUIRED;
+
+
+```
+### The evaluate::EvaluateHandle work item
+
+```cpp
+
+```
+
 #### per - filter description (what does it filter, role , code etc...) 
 
 #### Test against WannaCry 
