@@ -234,15 +234,37 @@ For a detailed description regarding the various checks avaliable , visit [OSR's
 Enabling verifier during the development process is extremley important for writing a quality driver, note that when writing a minifilter you should enable it for both your driver and the fltmgr. <br/>
 
 ## Detecting encryption 
-We already mentioned entropy as a measure to identify encryption of data, what we also mentioned is the fact compressed data tends to have high entropy.<br/>
+We already mentioned entropy as a measure to identify encryption of data, what we also mentioned is the fact compressed data tends to have high entropy.<br/> To identify encryption has taken place we need to collect two datapoints. 
+First, that represents the initial entropy of the contents of the file, and second that represents the entropy of the contents of the file after modifcation.<br/> 
 Based on statistical tests with a large set of files of different types, we came up with the following measurement, that takes into consideration the initial entropy of the file.<br/>
-.... show is encrypted function...<br/>
+
+```cpp
+// statistical logic to determine encryption 
+bool evaluate::IsEncrypted(double InitialEntropy, double FinalEntropy)
+{
+    if (InitialEntropy == INVALID_ENTROPY || FinalEntropy == INVALID_ENTROPY || InitialEntropy <= 0)
+        return false;
+
+    double EntropyDiff = FinalEntropy - InitialEntropy;
+
+    // the lower the initial entropy is the higher the required diff to be considered encrypted 
+    double SuspiciousDIff = (MAX_ENTROPY - InitialEntropy) * 0.83;
+
+    if (FinalEntropy >= MIN_ENTROPY_THRESHOLD && (EntropyDiff >= SuspiciousDIff || (InitialEntropy < ENTROPY_ENCRYPTED && FinalEntropy >= ENTROPY_ENCRYPTED) ) )
+        return true;
+
+    return false;
+
+}
+```
 We found 0.83 as the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
 As we increase the value of the coefficient the difference between the initial entropy value and the final entropy value to be considered suspicious increases. <br/>
 
 ## Tracking & Evaluating file handles   
-To identify encryption has taken place we need to collect two datapoints.<br/>
-First, that represents the initial entropy of the contents of the file, and second that represents the entropy of the contents of the file after modifcation.<br/> 
+As mentioned ransomware encryption can happen very differently when it comes to file-system operations, we are going to tackle each seperatley as each sequence requires it's own filtering logic.<br/>
+We will start with the most popular sequence seen in ransomwares:
+<img src="{{ site.url }}{{ site.baseurl }}/images/RansomSeq1.png" alt="">
+
 There a few things to consider:<br/>
 1. A file may be truncated when opened , consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
 2. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
