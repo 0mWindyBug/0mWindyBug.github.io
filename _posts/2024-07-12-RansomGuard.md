@@ -706,6 +706,16 @@ where ```processes::UpdateEncryptedFiles``` increases the process's ```Encrypted
 Knowing WannaCry follows the CreateFile -> ReadFile -> WriteFile -> CloseFile sequence , lets's test what we have so far against it!
 
 
+## Filtering Memory Mapped I/O 
+Usage of memory mapped files to perform the encryption becomes more and more common around ransomware families, which makes it harder for behavior based anti-ransomware solutions to keep track of what is going on, as mentioned this is due to the nature of memory mapped I/O.<br/>
+<img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence2.png" alt="">
+
+A file mapping is essentially a section object , with CreateFileMapping being a wrapper around NtCreateSection.<br/>
+To write to a mapped file , an application maps a view of the file to the process and operates on the view's pages directly, as a result the corresponding PTEs are marked as dirty , when the virtual address range is flushed or unmapped the dirty PTE bit is "pushed out" to the PFN (i.e. the Modified bit gets set). Mofidied PFNs are written out back to storage asynchrnously by one of the page writers , for file backed sections by the mapped page writer , and for pagefile backed sections by the modified page writer.<br/>
+
+From the ransomware perspective this is great , the actual write to the file seems as if it was originated from the system process , and since the ransomware process itself only interacts with memory rather than disk , it's much faster.<br/>
+
+Our goal is to be able not only to detect those mapped page writer encryptions , but to be able to pinpoint the actual malicious process behind it.<br/>
 
 #### per - filter description (what does it filter, role , code etc...) 
 
