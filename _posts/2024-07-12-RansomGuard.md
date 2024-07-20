@@ -637,8 +637,31 @@ At this point the file cannot be modified using the same handle , due to IRQL re
 ### The evaluate::EvaluateHandle work item
 
 ```cpp
+VOID evaluate::EvaluateHandle(PFLT_DEFERRED_IO_WORKITEM FltWorkItem, PFLT_CALLBACK_DATA Data, PVOID Context)
+{
+    pHandleContext HandleContx = (pHandleContext)Context;
+    ULONG FileSize = 0;
+    HandleContx->PostEntropy = utils::CalculateFileEntropyByName(HandleContx->Filter, HandleContx->Instance, &HandleContx->FileName, FLT_NO_CONTEXT, nullptr);
+
+    double EntropyDiff = HandleContx->PostEntropy - HandleContx->PreEntropy;
+    if (evaluate::IsEncrypted(HandleContx->PreEntropy, HandleContx->PostEntropy))
+    {
+        if (HandleContx->OriginalContent && HandleContx->InitialFileSize > 0)
+        {
+            if (NT_SUCCESS(restore::BackupFile(&HandleContx->FinalComponent, HandleContx->OriginalContent, HandleContx->InitialFileSize)))
+                DbgPrint("[*] backed up %wZ\n", HandleContx->FileName);
+        }
+        processes::UpdateEncryptedFiles(HandleContx->RequestorPid);
+    }
+
+    FltReleaseContext(HandleContx);
+    FltFreeDeferredIoWorkItem(FltWorkItem);
+    FltCompletePendedPostOperation(Data);
+}
 
 ```
+where ```processes::UpdateEncryptedFiles``` increases the process's ```EncryptedFiles``` and terminates it if the threshold is met.<br/>
+
 
 #### per - filter description (what does it filter, role , code etc...) 
 
