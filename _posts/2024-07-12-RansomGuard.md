@@ -253,17 +253,17 @@ Any I/O operations (excluding paging I/O , IRP_MJ_QUERY_INFORMATION and apparent
 The following diagram summerizes RansomGuard's design for evaluating operations across the same handle.<br/>
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
-Next , let's walkthrough each filter to elaborate on design decisions and the implemntation. <br/> 
+Next , let's walkthrough each filter.<br/> 
 
 ### filters::PreCreate 
 Generally speaking , the PreCreate filter is responsible to filter out any uninteresting I/O requests. For now , we are only interested in 
-file opens for R/W from usermode (so yes , not filtering new files , altough that's going to change later on in the blogpost). <br/>
+file opens for R/W ,  from usermode (so yes , not filtering new files , altough that's going to change later on in the blogpost). <br/>
 In addition , as we've discussed earlier this is our only chance to capture the initial state of truncated files , if the file might get truncated - we read the file , calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.<br/>
-Lastly , to enforce access restrictions :
-* The restore directory is accessible only from kernel mode
-* A process marked as malicious(ransomware) is blocked from any file-system access
+Lastly , we enforce access restrictions : <br/>
+* The restore directory is accessible only from kernel mode.
+  - The user can connect to RansomGuard's filter port and issue a control to copy the files to a user-accesible location. <br/>
+* A process marked as malicious(ransomware) is blocked from any file-system access.
 <br/>
-  
 ```cpp
 FLT_PREOP_CALLBACK_STATUS
 filters::PreCreate(
@@ -407,8 +407,172 @@ typedef struct _Process
 	Mutex SectionsListLock;
 } Process, * pProcess;
 ```
-Ignore some of these fields for now, they will make sense later. <br/>
-Since we use a statistical logic to identify encryption , we set a threshold of encrypted by a process to which we consider it as ransomware, the ```EncryptedFiles``` counter is used for that matter. <br/>
+Since we use a statistical logic to identify encryption , we set a threshold of encrypted files by a process in which we consider it as ransomware, the ```EncryptedFiles``` counter is used for that matter, the rest of the structure will make sense later on in the blogpost. <br/> 
+
+### filters::PostCreate 
+Here, if the file is not new (for now) and if the file-system supports FileObject contexts for the given operation(not supported in the paging I/O path) -  we initialize our FileObject context structure and attach it to the FileObject , nothing complex.<br/>
+```cpp
+FLT_POSTOP_CALLBACK_STATUS
+filters::PostCreate(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_opt_ PVOID CompletionContext,
+	_In_ FLT_POST_OPERATION_FLAGS Flags
+)
+
+{
+
+	pCreateCompletionContext PreCreateInfo = (pCreateCompletionContext)CompletionContext;
+
+	if (Flags & FLTFL_POST_OPERATION_DRAINING || !FltSupportsStreamHandleContexts(FltObjects->FileObject) || Data->IoStatus.Information == FILE_DOES_NOT_EXIST)
+	{
+		if (PreCreateInfo->SavedContent)
+			ExFreePoolWithTag(PreCreateInfo->OriginalContent,TAG);
+
+		FltFreePoolAlignedWithTag(FltObjects->Instance, CompletionContext, TAG);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+
+	const auto& params = Data->Iopb->Parameters.Create;
+
+
+	pHandleContext HandleContx = nullptr;
+	NTSTATUS status = FltAllocateContext(FltObjects->Filter, FLT_STREAMHANDLE_CONTEXT, sizeof(HandleContext), NonPagedPool, reinterpret_cast<PFLT_CONTEXT*>(&HandleContx));
+	if (!NT_SUCCESS(status))
+	{
+		if (PreCreateInfo->SavedContent)
+			ExFreePoolWithTag(PreCreateInfo->OriginalContent, TAG);
+		FltFreePoolAlignedWithTag(FltObjects->Instance, CompletionContext, TAG);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+
+	// init context
+	HandleContx->Instance = FltObjects->Instance;
+	HandleContx->Filter = FltObjects->Filter;
+	HandleContx->RequestorPid  = FltGetRequestorProcessId(Data);
+	HandleContx->PostEntropy = INVALID_ENTROPY;
+	HandleContx->PreEntropy = INVALID_ENTROPY;
+	HandleContx->OriginalContent = nullptr;
+	HandleContx->InitialFileSize = 0;
+	HandleContx->FinalComponent.Buffer = nullptr;
+	HandleContx->FileName.Buffer = nullptr;
+	HandleContx->WriteOccured = false;
+	HandleContx->SavedContent = PreCreateInfo->SavedContent;
+
+	// if entropy was already calculated modify the default context 
+	if (PreCreateInfo->CalculatedEntropy)
+	{
+		HandleContx->WriteOccured = true; 
+		HandleContx->PreEntropy = PreCreateInfo->PreEntropy;
+	}
+	if (PreCreateInfo->SavedContent)
+	{
+		HandleContx->OriginalContent = PreCreateInfo->OriginalContent;
+		HandleContx->InitialFileSize = PreCreateInfo->InitialFileSize;
+	}
+
+	// all pre create info has been moved to the handle context
+	FltFreePoolAlignedWithTag(FltObjects->Instance, CompletionContext, TAG);
+
+	FilterFileNameInformation FileNameInfo(Data);
+	PFLT_FILE_NAME_INFORMATION NameInformation = FileNameInfo.Get();
+	
+	if (!NameInformation)
+	{
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+	HandleContx->FileName.Length = NameInformation->Name.Length;
+	HandleContx->FileName.MaximumLength = NameInformation->Name.MaximumLength;
+	if (NameInformation->Name.MaximumLength <= 0)
+	{
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+
+	HandleContx->FileName.Buffer = (PWCHAR)ExAllocatePoolWithTag(NonPagedPool, HandleContx->FileName.MaximumLength, TAG);
+	if (!HandleContx->FileName.Buffer)
+	{
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+	
+	PUNICODE_STRING FileName = &NameInformation->Name;
+	if (!FileName || !FileName->Buffer)
+	{
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+	RtlCopyUnicodeString(&(HandleContx->FileName), FileName);
+
+	HandleContx->FinalComponent.Length = NameInformation->FinalComponent.Length;
+	HandleContx->FinalComponent.MaximumLength = NameInformation->FinalComponent.MaximumLength;
+	if (NameInformation->FinalComponent.MaximumLength <= 0)
+	{
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+
+	HandleContx->FinalComponent.Buffer = (PWCHAR)ExAllocatePoolWithTag(NonPagedPool, HandleContx->FinalComponent.MaximumLength, TAG);
+	if (!HandleContx->FinalComponent.Buffer)
+	{
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+
+	PUNICODE_STRING FinalComponent = &NameInformation->FinalComponent;
+	if (!FinalComponent || !FinalComponent->Buffer)
+	{
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+
+	RtlCopyUnicodeString(&(HandleContx->FinalComponent), &NameInformation->FinalComponent);
+	status = FltSetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, FLT_SET_CONTEXT_KEEP_IF_EXISTS, reinterpret_cast<PFLT_CONTEXT>(HandleContx), nullptr);
+	if (!NT_SUCCESS(status))
+	{
+		FltReleaseContext(HandleContx);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+	FltReleaseContext(HandleContx);
+	return FLT_POSTOP_FINISHED_PROCESSING;
+}
+```
+### filters::PreWrite 
+If the FileObject is monitored (has a context attached to it) , and if it's the first write using the FileObject , capture the initial state of the file.<br/>
+```cpp
+// filtering logic for any I/O other than noncached paging I/O 
+	pHandleContext HandleContx = nullptr;
+	status = FltGetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, reinterpret_cast<PFLT_CONTEXT*>(&HandleContx));
+	if (!NT_SUCCESS(status))
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	AutoContext AutoHandleContx(HandleContx);
+	
+	// this is true if the file was opened as truncated or it's not the first write using the handle 
+	if (HandleContx->WriteOccured)
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	
+
+	HandleContx->WriteOccured = true;
+	
+	HandleContx->PreEntropy = utils::CalculateFileEntropy(FltObjects->Instance, FltObjects->FileObject, HandleContx, true);
+
+	return FLT_PREOP_SUCCESS_NO_CALLBACK;
+```
+within ```utils::CalculateFileEntropy``` , the original content of the file is backed up in the context.<br/>
+```cpp
+ Entropy = utils::CalculateEntropy(DiskContent, FileInfo.EndOfFile.QuadPart);
+
+        if (InitialEntropy && Context)
+        {
+            Context->OriginalContent = DiskContent;
+            Context->InitialFileSize = FileInfo.EndOfFile.QuadPart;
+            Context->SavedContent = true;
+        }
+
+```
 
 
 #### per - filter description (what does it filter, role , code etc...) 
