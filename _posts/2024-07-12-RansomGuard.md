@@ -262,7 +262,7 @@ As we increase the value of the coefficient the difference between the initial e
 
 ## Tracking & Evaluating file handles   
 As mentioned ransomware encryption can happen very differently when it comes to file-system operations, we are going to tackle each seperatley as each sequence requires it's own filtering logic.<br/>
-We will start with the most popular sequence seen in ransomwares:
+Consider the most obvious sequence seen in ransomwares : 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence1.png" alt="">
 
 There a few things to consider:<br/>
