@@ -390,6 +390,7 @@ filters::PreCreate(
 
 ```
 A process notify routine managed linked list is used to track active processes in the system and maintain process state across different file-system operations, each process described by the following struct : <br/>
+
 ```cpp
 typedef struct _Process
 {
@@ -409,8 +410,9 @@ typedef struct _Process
 ```
 Since we use a statistical logic to identify encryption , we set a threshold of encrypted files by a process in which we consider it as ransomware, the ```EncryptedFiles``` counter is used for that matter, the rest of the structure will make sense later on in the blogpost. <br/> 
 
-### filters::PostCreate 
+### PostCreate 
 Here, if the file is not new (for now) and if the file-system supports FileObject contexts for the given operation(not supported in the paging I/O path) -  we initialize our FileObject context structure and attach it to the FileObject , nothing complex.<br/>
+
 ```cpp
 FLT_POSTOP_CALLBACK_STATUS
 filters::PostCreate(
@@ -538,7 +540,8 @@ filters::PostCreate(
 	return FLT_POSTOP_FINISHED_PROCESSING;
 }
 ```
-### filters::PreWrite 
+
+### PreWrite 
 If the FileObject is monitored (has a context attached to it) , and if it's the first write using the FileObject , capture the initial state of the file.<br/>
 ```cpp
 // filtering logic for any I/O other than noncached paging I/O 
