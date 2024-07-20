@@ -581,6 +581,26 @@ within ```utils::CalculateFileEntropy``` , the original content of the file is b
 
 ```
 
+### PreCleanup 
+Again , simply check if the file is monitored and a write has been made, if not there's no need to evaluate the context. <br/>
+
+```cpp
+	pHandleContext HandleContx = nullptr;
+	NTSTATUS status = FltGetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, reinterpret_cast<PFLT_CONTEXT*>(&HandleContx));
+	if (!NT_SUCCESS(status))
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+	// no write occured , no need to evaluate 
+	if (!HandleContx->WriteOccured)
+	{
+		FltReleaseContext(HandleContx);
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	}
+	// pass handle context pointer to post cleanup 
+	*CompletionContext = HandleContx;
+	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
+
+```
 
 #### per - filter description (what does it filter, role , code etc...) 
 
