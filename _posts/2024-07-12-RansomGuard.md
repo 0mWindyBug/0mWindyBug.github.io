@@ -263,7 +263,7 @@ As we increase the value of the coefficient the difference between the initial e
 ## Tracking & Evaluating file handles   
 As mentioned ransomware encryption can happen very differently when it comes to file-system operations, we are going to tackle each seperatley as each sequence requires it's own filtering logic.<br/>
 We will start with the most popular sequence seen in ransomwares:
-<img src="{{ site.url }}{{ site.baseurl }}/images/RansomSeq1.png" alt="">
+<img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence1.png" alt="">
 
 There a few things to consider:<br/>
 1. A file may be truncated when opened , consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
