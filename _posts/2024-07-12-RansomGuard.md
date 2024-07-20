@@ -660,7 +660,10 @@ VOID evaluate::EvaluateHandle(PFLT_DEFERRED_IO_WORKITEM FltWorkItem, PFLT_CALLBA
 }
 
 ```
-where ```processes::UpdateEncryptedFiles``` increases the process's ```EncryptedFiles``` and terminates it if the threshold is met.<br/>
+where ```processes::UpdateEncryptedFiles``` increases the process's ```EncryptedFiles``` counter and terminates it if the threshold is met.<br/>
+
+Knowing WannaCry follows the CreateFile -> ReadFile -> WriteFile -> CloseFile sequence , lets's test what we have so far against it!
+
 
 
 #### per - filter description (what does it filter, role , code etc...) 
