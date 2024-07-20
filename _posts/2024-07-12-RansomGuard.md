@@ -264,7 +264,9 @@ Lastly , we enforce access restrictions : <br/>
   - The user can connect to RansomGuard's filter port and issue a control to copy the files to a user-accesible location. <br/>
 * A process marked as malicious(ransomware) is blocked from any file-system access.
 <br/>
+
 ```cpp
+
 FLT_PREOP_CALLBACK_STATUS
 filters::PreCreate(
 	_Inout_ PFLT_CALLBACK_DATA Data,
@@ -389,6 +391,7 @@ filters::PreCreate(
 }
 
 ```
+
 A process notify routine managed linked list is used to track active processes in the system and maintain process state across different file-system operations, each process described by the following struct : <br/>
 
 ```cpp
@@ -543,6 +546,7 @@ filters::PostCreate(
 
 ### PreWrite 
 If the FileObject is monitored (has a context attached to it) , and if it's the first write using the FileObject , capture the initial state of the file.<br/>
+
 ```cpp
 // filtering logic for any I/O other than noncached paging I/O 
 	pHandleContext HandleContx = nullptr;
