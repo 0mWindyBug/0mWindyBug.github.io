@@ -900,8 +900,6 @@ auto& WriteParams = Data->Iopb->Parameters.Write;
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
 		}
 
-
-
 		// read file from disk and make a copy of it 
 		ULONG FileSize = utils::GetFileSize(FltObjects->Instance, FltObjects->FileObject);
 		if (FileSize == 0)
@@ -980,6 +978,40 @@ Now that we have two datapoints we can evaluate the contents in the buffers :
 		}
 
 ```
+If the oepration is synchrnous, business as usual as we are in the caller's context. otherwise we call ```processes::UpdateEncryptedFiles``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
+
+Theortically , there's a chance for a process to modify thousands of file mappings and terminate before the mapped page writer have been activated. When terminated , our process notify routine is invoked and the process structure is freed - we lose all tracking information we had on that process, to handle it , if the process terminated has created more than a threshold number of R/W sections , it's removal from the list is deffered to a dedicated system thread : 
+```cpp
+	// if the process has created several R/W sections defer removal to a later time so the entry persists until a potential mapped page writer write
+		// we need this to evaluate and block future mapped page writer writes and block them in case a process entry marked as malicious owns a section to it 
+		
+		pProcess ProcessEntry = processes::GetProcessEntry(HandleToUlong(ProcessId));
+		if (!ProcessEntry)
+			return;
+
+		ProcessEntry->Terminated = true;
+		ProcessEntry->OriginalPid = ProcessEntry->Pid;
+
+		if (ProcessEntry->SectionsCount >= NUMBER_OF_SECTIONS_TO_DEFER_REMOVAL)
+		{
+			NTSTATUS status;
+			HANDLE ThreadHandle;
+			status = PsCreateSystemThread(&ThreadHandle, THREAD_ALL_ACCESS, NULL, NULL, NULL, processes::DeferredRemover, ProcessEntry);
+			if (!NT_SUCCESS(status))
+			{
+				DbgPrint("[*] could not defer removal to system thread : ( \n");
+				processes::RemoveProcess(HandleToUlong(ProcessId));
+			}
+		}
+		else
+		{
+			processes::RemoveProcess(HandleToUlong(ProcessId));
+		}
+```
+The system thread waits for two minutes and removes the entry , we also have to "fake" the pid to avoid ambiguity conflicts (i.e. a new process is created with the same pid that have just been terminated.)<br/>
+
+
+
 
 #### per - filter description (what does it filter, role , code etc...) 
 
