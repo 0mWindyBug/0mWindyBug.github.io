@@ -725,18 +725,150 @@ Followed by the following callstack : <br/>
 <img src="{{ site.url }}{{ site.baseurl }}/images/SynchrnousFlush.png" alt="">
 
 Clerarly , ```MmFlushSectionInternal``` , where the actual write is initiated , is surrounded by two FsRtl callbacks :
-* ```FsRtlAcquireForCcFlushEx``` - ```IRP_MJ_ACQUIRE_FOR_CC_FLUSH``` (before the write)
-* ```FsRtlReleaseForCcFlushEx``` - ```IRP_MJ_RELEASE_FOR_CC_FLUSH``` (after the write)
+* ```FsRtlAcquireFileForCcFlushEx``` - ```IRP_MJ_ACQUIRE_FOR_CC_FLUSH``` (before the write)
+* ```FsRtlReleaseFileForCcFlushEx``` - ```IRP_MJ_RELEASE_FOR_CC_FLUSH``` (after the write)
 
 Most importantly , for a synchrnous flush the write is initiated from the caller's context (which is why it's unlikely to see it used in a ransomware). <br/>
 
 ### Asynchrnous mapped page writer write 
 In contrast , for an asynchrnous mapped page writer write two different FsRtl callbacks are invoked  : <br/>
-* ```FsRtlAcquireForModWriteEx``` - ```IRP_MJ_ACQUIRE_FOR_MOD_WRITE``` (before the write)
-* ```FsRtlReleaseForModWriteEx``` - ```IRP_MJ_RELEASE_FOR_MOD_WRITE``` (after the write)
+* ```FsRtlAcquireFileForModWriteEx``` - ```IRP_MJ_ACQUIRE_FOR_MOD_WRITE``` (before the write)
+* ```FsRtlReleaseFileForModWriteEx``` - ```IRP_MJ_RELEASE_FOR_MOD_WRITE``` (after the write)
 
 This can be easily seen in ```MiMappedPageWriter``` -> ```MiGatherMappedPages``` which eventually calls ```IoAsynchrnousPageWrite``` or alternatively, in Procmon with advanced output enabled.<br/> 
 <img src="{{ site.url }}{{ site.baseurl }}/images/AcquireForMod.png" alt="">
+
+Note ```IRP_MJ_RELEASE_FOR_MOD_WRITE``` is typically invoked as part of a special kernel APC , and always runs at IRQL == APC_LEVEL. <br/>
+
+Altough not used in RansomGuard, using the Acquire/Release callbacks as two datapoints to filter memory mapped I/O writes is a possibality.<br/>
+
+### Building asynchrnous context 
+To connect between a mapped page writer write and the process that memory mapped the file , we have to monitor the creation of section objects.<br/> The heuristic idea is to assume any process that created a R/W section object for the file might be the one that modified the mapping and triggered the asynchrnous write, that means , whenever our minifilter sees a mapped page writer encryption , we will traverse each process and check if it ever created a R/W section for file in question , if so , it's ```EncryptedFiles``` counter will be increased.<br/> The odds for two different processes (one being a ransomware and the other being legitimiate) , to create R/W section objects for the same X number of files , and for those X number of files to also get encrypted are very slim to say the least , and so os is the risk for false positives.<br/>
+
+To track the creation of section objects we can filter ```IRP_MJ_ACQUIRE_FOR_SECTION_SYNCHRONIZATION```, we are only interested in the creation of R/W section objects from UserMode : 
+```cpp
+if(Data->Iopb->Parameters.AcquireForSectionSynchronization.SyncType == SyncTypeCreateSection && Data->Iopb->Parameters.AcquireForSectionSynchronization.PageProtection == PAGE_READWRITE && Data->RequestorMode == UserMode)
+```
+If that's indeed the case: 
+* If it does not exist , a file context is allocated and attached to the file , initialized with the file name.
+* the name of the file being mapped is added to a linked list (```SectionsOwned```) of files mapped by the process (using it's process entry structure).
+
+```cpp
+
+// if new r/w section was created 
+	if (Data->Iopb->Parameters.AcquireForSectionSynchronization.SyncType == SyncTypeCreateSection && Data->Iopb->Parameters.AcquireForSectionSynchronization.PageProtection == PAGE_READWRITE && Data->RequestorMode == UserMode)
+	{
+		pFileContext FileContx = nullptr;
+
+		// allocate FileContext if it does not exist 
+		NTSTATUS status = FltGetFileContext(FltObjects->Instance, FltObjects->FileObject, reinterpret_cast<PFLT_CONTEXT*>(&FileContx));
+		if (!NT_SUCCESS(status))
+		{
+
+			status = FltAllocateContext(FltObjects->Filter, FLT_FILE_CONTEXT, sizeof(FileContext), NonPagedPool, reinterpret_cast<PFLT_CONTEXT*>( &FileContx));
+			if (!NT_SUCCESS(status))
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+			FilterFileNameInformation FileNameInfo(Data);
+			if (!FileNameInfo.Get())
+			{
+				FltReleaseContext(FileContx);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
+
+			// init file name in context 
+			status = FileNameInfo.Parse();
+			if (!NT_SUCCESS(status))
+			{
+				FltReleaseContext(FileContx);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
+
+			FileContx->FileName.MaximumLength = FileNameInfo->Name.MaximumLength;
+			FileContx->FileName.Length = FileNameInfo->Name.Length;
+			if (FileNameInfo->Name.Length == 0 || !FileNameInfo->Name.Buffer)
+			{
+				FltReleaseContext(FileContx);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
+			FileContx->FileName.Buffer = (WCHAR*)ExAllocatePoolWithTag(NonPagedPool, FileNameInfo->Name.MaximumLength, TAG);
+			if (!FileContx->FileName.Buffer) {
+				FltReleaseContext(FileContx);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
+			RtlCopyUnicodeString(&FileContx->FileName, &FileNameInfo->Name);
+
+
+			FileContx->FinalComponent.MaximumLength = FileNameInfo->FinalComponent.MaximumLength;
+			FileContx->FinalComponent.Length = FileNameInfo->FinalComponent.Length;
+
+			if (FileNameInfo->FinalComponent.Length == 0 || !FileNameInfo->FinalComponent.Buffer)
+			{
+				FltReleaseContext(FileContx);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
+			FileContx->FinalComponent.Buffer = (WCHAR*)ExAllocatePoolWithTag(NonPagedPool, FileNameInfo->FinalComponent.MaximumLength, TAG);
+			if (!FileContx->FinalComponent.Buffer) {
+				FltReleaseContext(FileContx);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
+			RtlCopyUnicodeString(&FileContx->FinalComponent, &FileNameInfo->FinalComponent);
+
+			// set context to file 
+			status = FltSetFileContext(FltObjects->Instance, FltObjects->FileObject, FLT_SET_CONTEXT_KEEP_IF_EXISTS, FileContx, nullptr);
+			if (!NT_SUCCESS(status))
+			{
+				FltReleaseContext(FileContx);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
+			
+
+
+			DbgPrint("[*] R/W section is created for %wZ\n", FileContx->FileName);
+
+		}
+
+		// track section in process section list  
+		AutoLock<Mutex>process_list_lock(ProcessesListMutex);
+		pProcess ProcessEntry = processes::GetProcessEntry(FltGetRequestorProcessId(Data));
+		if (!ProcessEntry)
+		{
+			FltReleaseContext(FileContx);
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		}
+
+		sections::AddSection(&FileContx->FileName, ProcessEntry);
+
+		FltReleaseContext(FileContx);
+	}
+
+	return FLT_PREOP_SUCCESS_NO_CALLBACK;
+```
+
+
+
+### Noncached paging I/O PreWrite filtering
+We know memory mapped I/O , regardless if synchrnous (explicit flush) or asynchrnous (mapped / modified page writer write) comes in the form of noncached paging I/O.<br/> 
+Up until now , such I/O has been indirectly filtered out as it has no support for FileObject contexts, we can add the following check at the start of our PreWrite filter.<br
+```cpp
+// not interested in writes to the paging file 
+	if (FsRtlIsPagingFile(FltObjects->FileObject))
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	
+
+	// if noncached paging I/O and not to the pagefile
+	if (FlagOn(Data->Iopb->IrpFlags, IRP_NOCACHE) && FlagOn(Data->Iopb->IrpFlags, IRP_PAGING_IO))
+```																	  
+Next , we are going to check if the file has a file context attached to it , as we are only interested in noncached paging writes to files that have beem previously mapped by UM processes.<br/>
+```cpp
+pFileContext FileContx;
+
+		// if there's a file context for the file 
+		status = FltGetFileContext(FltObjects->Instance, FltObjects->FileObject, reinterpret_cast<PFLT_CONTEXT*>(&FileContx));
+		if (!NT_SUCCESS(status))
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+```
+
 
 
 #### per - filter description (what does it filter, role , code etc...) 
