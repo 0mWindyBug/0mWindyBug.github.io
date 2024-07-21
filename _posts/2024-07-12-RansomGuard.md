@@ -724,13 +724,13 @@ Whilst I personally haven't seen such usage in ransomwares, an application can c
 Followed by the following callstack : <br/> 
 <img src="{{ site.url }}{{ site.baseurl }}/images/SynchrnousFlush.png" alt="">
 Clerarly , ```MmFlushSectionInternal``` , where the actual write is initiated , is surrounded by two FsRtl callbacks :
-* ```FsRtlAcquireForCcFlush``` - ```IRP_MJ_ACQUIRE_FOR_CC_FLUSH``` (before the write)
-* ```FsRtlReleaseForCcFlush``` - ```IRP_MJ_RELEASE_FOR_CC_FLUSH``` (after the write)
+* ```FsRtlAcquireForCcFlushEx``` - ```IRP_MJ_ACQUIRE_FOR_CC_FLUSH``` (before the write)
+* ```FsRtlReleaseForCcFlushEx``` - ```IRP_MJ_RELEASE_FOR_CC_FLUSH``` (after the write)
 
 Most importantly , for a synchrnous flush the write is initiated from the caller's context (which is why it's unlikely to see it used in a ransomware). <br/>
 
 ### Asynchrnous mapped page writer write 
-In contrast , for an asynchrnous mapped page writer write two different FSRtl callbacks are invoked  : <br/>
+In contrast , for an asynchrnous mapped page writer write two different FsRtl callbacks are invoked  : <br/>
 * ```FsRtlAcquireForModWriteEx``` - ```IRP_MJ_ACQUIRE_FOR_MOD_WRITE``` (before the write)
 * ```FsRtlReleaseForModWriteEx``` - ```IRP_MJ_RELEASE_FOR_MOD_WRITE``` (after the write)
 
