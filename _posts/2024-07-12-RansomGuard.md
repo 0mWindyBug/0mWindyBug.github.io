@@ -719,7 +719,7 @@ Our goal is to be able not only to detect those mapped page writer encryptions ,
 ### Synhcrnous Flush 
 Whilst I personally haven't seen such usage in ransomwares, an application can call explictly ```FlushViewOfFile``` to flush changes back to storage synchrnously , in which case the nature of the paging write is different.<br/>
 ```FlushViewOfFile``` maps to ```MmFlushVirtualMemory``` in ntos , which in turn calls ```MmFlushSectionInternal``` as shown below : <br/>
-<img src="{{ site.url }}{{ site.baseurl }}/images/AcquirerCc.png" alt="">
+<img src="{{ site.url }}{{ site.baseurl }}/images/AcquireCc.png" alt="">
 
 Followed by the following callstack : <br/> 
 <img src="{{ site.url }}{{ site.baseurl }}/images/SynchrnousFlush.png" alt="">
