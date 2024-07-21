@@ -1010,18 +1010,8 @@ Theortically , there's a chance for a process to modify thousands of file mappin
 ```
 The system thread waits for two minutes and removes the entry , we also have to "fake" the pid to avoid ambiguity conflicts (i.e. a new process is created with the same pid that have just been terminated.)<br/>
 
+### Blocking a mapped page writer write
 
-
-
-#### per - filter description (what does it filter, role , code etc...) 
-
-#### Test against WannaCry 
-
-## Tracking & Evaluating Memory Mapped I/O 
-
-#### Design diagram 
-
-#### per - filter description (what does it filter, role , code etc...) 
 
 #### Test against Maze 
 
