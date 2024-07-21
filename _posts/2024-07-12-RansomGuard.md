@@ -723,6 +723,7 @@ Whilst I personally haven't seen such usage in ransomwares, an application can c
 
 Followed by the following callstack : <br/> 
 <img src="{{ site.url }}{{ site.baseurl }}/images/SynchrnousFlush.png" alt="">
+
 Clerarly , ```MmFlushSectionInternal``` , where the actual write is initiated , is surrounded by two FsRtl callbacks :
 * ```FsRtlAcquireForCcFlushEx``` - ```IRP_MJ_ACQUIRE_FOR_CC_FLUSH``` (before the write)
 * ```FsRtlReleaseForCcFlushEx``` - ```IRP_MJ_RELEASE_FOR_CC_FLUSH``` (after the write)
