@@ -716,11 +716,29 @@ To write to a mapped file , an application maps a view of the file to the proces
 From the ransomware perspective this is great , the actual write to the file seems as if it was originated from the system process, it can even happen after the process is terminated , and since the ransomware process itself only interacts with memory rather than disk , it's also much faster.<br/>
 Our goal is to be able not only to detect those mapped page writer encryptions , but to be able to pinpoint back at the malicious process behind it.<br/>
 
-# Some memory mapped I/O relevant internals 
+### Synhcrnous Flush 
 Whilst I personally haven't seen such usage in ransomwares, an application can call explictly ```FlushViewOfFile``` to flush changes back to storage synchrnously , in which case the nature of the paging write is different.<br/>
-```FlushViewOfFile``` maps to ```MmFlushVirtualMemory``` in ntos , which in turn calls ```MmFlushSectionInternal``` as shown below : 
+```FlushViewOfFile``` maps to ```MmFlushVirtualMemory``` in ntos , which in turn calls ```MmFlushSectionInternal``` as shown below : <br/>
+<img src="{{ site.url }}{{ site.baseurl }}/images/AcquireForCc.png" alt="">
 
- 
+Followed by the following callstack : <br/> 
+<img src="{{ site.url }}{{ site.baseurl }}/images/SynchrnousFlush.png" alt="">
+
+Clerarly , ```MmFlushSectionInternal``` , where the actual write is initiated , is surrounded by two FsRtl callbacks :
+* ```FsRtlAcquireForCcFlush``` - ```IRP_MJ_ACQUIRE_FOR_CC_FLUSH``` (before the write)
+* ```FsRtlReleaseForCcFlush``` - ```IRP_MJ_RELEASE_FOR_CC_FLUSH``` (after the write)
+
+Most importantly , for a synchrnous flush the write is initiated from the caller's context (which is why it's unlikely to see it used in a ransomware). <br/>
+
+### Asynchrnous mapped page writer write 
+In contrast , for an asynchrnous mapped page writer write two different FSRtl callbacks are invoked  : <br/>
+* ```FsRtlAcquireForModWriteEx``` - ```IRP_MJ_ACQUIRE_FOR_MOD_WRITE``` (before the write)
+* ```FsRtlReleaseForModWriteEx``` - ```IRP_MJ_RELEASE_FOR_MOD_WRITE``` (after the write)
+
+This can be easily seen in ```MiMappedPageWriter``` -> ```MiGatherMappedPages``` which eventually calls ```IoAsynchrnousPageWrite``` or alternatively, in Procmon with advanced output enabled.<br/> 
+<img src="{{ site.url }}{{ site.baseurl }}/images/AcquireForMod.png" alt="">
+
+
 #### per - filter description (what does it filter, role , code etc...) 
 
 #### Test against WannaCry 
