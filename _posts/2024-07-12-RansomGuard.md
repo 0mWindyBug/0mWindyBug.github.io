@@ -750,8 +750,8 @@ To track the creation of section objects we can filter ```IRP_MJ_ACQUIRE_FOR_SEC
 if(Data->Iopb->Parameters.AcquireForSectionSynchronization.SyncType == SyncTypeCreateSection && Data->Iopb->Parameters.AcquireForSectionSynchronization.PageProtection == PAGE_READWRITE && Data->RequestorMode == UserMode)
 ```
 If that's indeed the case: 
-* If it does not exist , a file context is allocated and attached to the file , initialized with the file name.
-* the name of the file being mapped is added to a linked list (```SectionsOwned```) of files mapped by the process (using it's process entry structure).
+* If not attached yet , a file context is allocated and attached to the file , initialized with the file name.
+* the name of the file being mapped is added to a linked list (```SectionsOwned```) of files mapped by the process (under the process entry structure).
 
 ```cpp
 
@@ -845,8 +845,6 @@ If that's indeed the case:
 	return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
 
-
-
 ### Noncached paging I/O PreWrite filtering
 We know memory mapped I/O , regardless if synchrnous (explicit flush) or asynchrnous (mapped / modified page writer write) comes in the form of noncached paging I/O.<br/> 
 Up until now , such I/O has been indirectly filtered out as it has no support for FileObject contexts, we can add the following check at the start of our PreWrite filter.<br
@@ -868,8 +866,120 @@ pFileContext FileContx;
 		if (!NT_SUCCESS(status))
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
+Since the mapped page write only initiates one write , we can reliably capture both of our datapoints already in pre write, we know about the state of the file before the write and we know what is going to be written.<br/>
+RansomGuard simulates the write in memory as shown below: 
+```cpp
+auto& WriteParams = Data->Iopb->Parameters.Write;
+		if (WriteParams.Length == 0)
+		{
+			FltReleaseContext(FileContx);
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		}
 
 
+		// retrive the data to be written 
+		if (WriteParams.MdlAddress != nullptr)
+		{
+			DataToBeWritten = MmGetSystemAddressForMdlSafe(WriteParams.MdlAddress,NormalPagePriority | MdlMappingNoExecute);
+			if (!DataToBeWritten)
+			{
+				FltReleaseContext(FileContx);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
+		}
+		// no mdl was provided so use buffer 
+		else
+		{
+			DataToBeWritten = WriteParams.WriteBuffer;
+		}
+		
+		DataCopy = ExAllocatePoolWithTag(NonPagedPool, WriteParams.Length, TAG);
+		if (!DataCopy)
+		{
+			FltReleaseContext(FileContx);
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		}
+
+
+
+		// read file from disk and make a copy of it 
+		ULONG FileSize = utils::GetFileSize(FltObjects->Instance, FltObjects->FileObject);
+		if (FileSize == 0)
+		{
+			FltReleaseContext(FileContx);
+			ExFreePoolWithTag(DataCopy, TAG);
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		}
+
+		PVOID DiskContent = utils::ReadFileFromDisk(FltObjects->Instance, FltObjects->FileObject);
+		if (!DiskContent)
+		{
+			FltReleaseContext(FileContx);
+			ExFreePoolWithTag(DataCopy, TAG);
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		}
+
+		// make a copy of the buffer , must be done in try-except since there's a possibility it's a user buffer. 
+		__try {
+
+			RtlCopyMemory(DataCopy,
+				DataToBeWritten,
+				WriteParams.Length);
+
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) {
+			FltReleaseContext(FileContx);
+			ExFreePoolWithTag(DiskContent, TAG);
+			ExFreePoolWithTag(DataCopy, TAG);
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		}
+// simulate a write in memory 
+		SIZE_T SimulatedSize = (FileSize > WriteParams.ByteOffset.QuadPart + WriteParams.Length) ? FileSize : 		WriteParams.ByteOffset.QuadPart + WriteParams.Length;
+		PVOID SimulatedContent = ExAllocatePoolWithTag(NonPagedPool,SimulatedSize, TAG);
+		if (!SimulatedContent)
+		{
+			FltReleaseContext(FileContx);
+			ExFreePoolWithTag(DiskContent,TAG);
+			ExFreePoolWithTag(DataCopy, TAG);
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		}
+
+		RtlCopyMemory(SimulatedContent, DiskContent, FileSize);
+		RtlCopyMemory((PVOID)((ULONG_PTR)SimulatedContent + WriteParams.ByteOffset.QuadPart), DataCopy, WriteParams.Length);
+
+```
+Now that we have two datapoints we can evaluate the contents in the buffers : 
+```cpp
+	// evaluate buffers 
+		PreEntropy  = utils::CalculateEntropy(DiskContent, FileSize);
+		PostEntropy = utils::CalculateEntropy(SimulatedContent, FileSize);
+
+		double EntropyDiff = PostEntropy - PreEntropy;
+
+		DbgPrint("[*] [%wZ] pre paging write %d predicted paging write %d diff %d\n", FileContx->FileName, (int)ceil(PreEntropy * 1000), (int)ceil(PostEntropy  * 1000), (int)ceil(EntropyDiff * 1000));
+
+		if (evaluate::IsEncrypted(PreEntropy, PostEntropy))
+		{
+			ULONG RequestorPid = FltGetRequestorProcessId(Data);
+
+			// synchrnous -> explicit flush 
+			if (FlagOn(Data->Iopb->IrpFlags, IRP_SYNCHRONOUS_PAGING_IO) && RequestorPid != SYSTEM_PROCESS)
+			{
+				DbgPrint("[*] %wZ encrypted by %d\n", FileContx->FileName, RequestorPid);
+				processes::UpdateEncryptedFiles(RequestorPid);
+			}
+			// asynchrnous -> mapped page writer write 
+			else
+			{
+				DbgPrint("[*] %wZ encrypted by mapped page writer\n",FileContx->FileName);
+				processes::UpdateEncryptedFilesAsync(&FileContx->FileName);
+
+			}
+			if (NT_SUCCESS(restore::BackupFile(&FileContx->FileName, DiskContent, FileSize)))
+				DbgPrint("[*] backed up %wZ\n", FileContx->FinalComponent);
+		}
+
+```
 
 #### per - filter description (what does it filter, role , code etc...) 
 
