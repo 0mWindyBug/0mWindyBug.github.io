@@ -740,7 +740,7 @@ This can be easily seen in ```MiMappedPageWriter``` -> ```MiGatherMappedPages```
 
 Note ```IRP_MJ_RELEASE_FOR_MOD_WRITE``` is typically invoked as part of a special kernel APC , and always runs at IRQL == APC_LEVEL. <br/>
 
-Altough not used in RansomGuard, using the Acquire/Release callbacks as two datapoints to filter memory mapped I/O writes is a possibality.<br/>
+Altough not used in RansomGuard, using the Acquire/Release callbacks as two datapoints to filter memory mapped I/O writes is a possability.<br/>
 
 ### Building asynchrnous context 
 To connect between a mapped page writer write and the process that memory mapped the file , we have to monitor the creation of section objects.<br/> The heuristic idea is to assume any process that created a R/W section object for the file might be the one that modified the mapping and triggered the asynchrnous write, that means , whenever our minifilter sees a mapped page writer encryption , we will traverse each process and check if it ever created a R/W section for file in question , if so , it's ```EncryptedFiles``` counter will be increased.<br/> The odds for two different processes (one being a ransomware and the other being legitimiate) , to create R/W section objects for the same X number of files , and for those X number of files to also get encrypted are very slim to say the least , and so os is the risk for false positives.<br/>
@@ -847,7 +847,7 @@ If that's indeed the case:
 
 ### Noncached paging I/O PreWrite filtering
 We know memory mapped I/O , regardless if synchrnous (explicit flush) or asynchrnous (mapped / modified page writer write) comes in the form of noncached paging I/O.<br/> 
-Up until now , such I/O has been indirectly filtered out as it has no support for FileObject contexts, we can add the following check at the start of our PreWrite filter.<br
+Up until now , such I/O has been indirectly filtered out as it has no support for FileObject contexts, we can add the following check at the start of our PreWrite filter.<br/>
 ```cpp
 // not interested in writes to the paging file 
 	if (FsRtlIsPagingFile(FltObjects->FileObject))
