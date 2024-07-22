@@ -164,8 +164,7 @@ A minifilter can call ```FltSupports*Contexts``` to check if a context type is s
 Context management is probably one of the most frustrating parts of maintaining a minifilter, your unload hangs ? it's often down to incorrect context managment. this is one (of many) reasons to why you should always enable driver verifier , more on this later : ) <br/>
 The filter manager uses reference counting to manage the lifetime of a minifilter context , whenever a context is successfully created,  it is initialized with reference count of one. <br/>
 Whenever a context is referenced, for example by a successful context set or get, the filter manager increments the reference count of the context by one. When a context is no longer needed, its reference count must be decremented. A positive reference count means that the context is usable,  When the reference count becomes zero, the context is unusable, and the filter manager eventually frees it. <br/> 
-Lastly , note the filter manager is the one responsible for derefencing the Set* reference , not the minifilter - but when ? <br/>
-Thanks to the brilliant Rod Widdowson , these are the conditions : <br/>
+Lastly , note the filter manager is the one responsible for derefencing the Set* reference , it does that in the following conditions: <br/>
 - The attached to system structure is about to go away. For example, when the file system calls FsRtlTeardownPer StreamContexts as part of tearing down the FCB, the Filter Manager will detach any attached stream contexts and dereference them.</br>
 - The filter instance associated with the context is being detached.  Again taking the stream context example, during instance teardown after the InstanceTeardown callbacks have been made the filter manager will detach any stream contexts associated with this instance from their associated ADVANCED_FCB_HEADER and dereference them. <br/>
 
@@ -275,9 +274,9 @@ Any I/O operations (excluding paging I/O , IRP_MJ_QUERY_INFORMATION and apparent
 The following diagram summerizes RansomGuard's design for evaluating operations across the same handle.<br/>
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
-Next , let's walkthrough each filter.<br/> 
+Next , let's walkthrough each filter - we will hightlight key code blocks from each, for the full implementation see the project's repo.<br/> 
 
-### filters::PreCreate 
+### PreCreate 
 Generally speaking , the PreCreate filter is responsible to filter out any uninteresting I/O requests. For now , we are only interested in 
 file opens for R/W ,  from usermode (so yes , not filtering new files , altough that's going to change later on in the blogpost). <br/>
 In addition , as we've discussed earlier this is our only chance to capture the initial state of truncated files , if the file might get truncated - we read the file , calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.<br/>
@@ -978,7 +977,7 @@ Now that we have two datapoints we can evaluate the contents in the buffers :
 		}
 
 ```
-If the oepration is synchrnous, business as usual as we are in the caller's context. otherwise we call ```processes::UpdateEncryptedFiles``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
+If the oepration is synchrnous, business as usual as we are in the caller's context. otherwise we call ```processes::UpdateEncryptedFilesAsync``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
 
 Theortically , there's a chance for a process to modify thousands of file mappings and terminate before the mapped page writer have been activated. When terminated , our process notify routine is invoked and the process structure is freed - we lose all tracking information we had on that process, to handle it , if the process terminated has created more than a threshold number of R/W sections , it's removal from the list is deffered to a dedicated system thread : 
 ```cpp
