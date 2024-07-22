@@ -981,15 +981,13 @@ If the oepration is synchrnous, business as usual as we are in the caller's cont
 
 Theortically , there's a chance for a process to modify thousands of file mappings and terminate before the mapped page writer have been activated. When terminated , our process notify routine is invoked and the process structure is freed - we lose all tracking information we had on that process, to handle it , if the process terminated has created more than a threshold number of R/W sections , it's removal from the list is deffered to a dedicated system thread : 
 ```cpp
-	// if the process has created several R/W sections defer removal to a later time so the entry persists until a potential mapped page writer write
-		// we need this to evaluate and block future mapped page writer writes and block them in case a process entry marked as malicious owns a section to it 
-		
-		pProcess ProcessEntry = processes::GetProcessEntry(HandleToUlong(ProcessId));
+pProcess ProcessEntry = processes::GetProcessEntry(HandleToUlong(ProcessId));
 		if (!ProcessEntry)
 			return;
 
 		ProcessEntry->Terminated = true;
 		ProcessEntry->OriginalPid = ProcessEntry->Pid;
+		ProcessEntry->Pid = INVALID_PID;
 
 		if (ProcessEntry->SectionsCount >= NUMBER_OF_SECTIONS_TO_DEFER_REMOVAL)
 		{
@@ -1001,10 +999,6 @@ Theortically , there's a chance for a process to modify thousands of file mappin
 				DbgPrint("[*] could not defer removal to system thread : ( \n");
 				processes::RemoveProcess(HandleToUlong(ProcessId));
 			}
-		}
-		else
-		{
-			processes::RemoveProcess(HandleToUlong(ProcessId));
 		}
 ```
 The system thread waits for two minutes and removes the entry , we also have to "fake" the pid to avoid ambiguity conflicts (i.e. a new process is created with the same pid that have just been terminated.)<br/>
