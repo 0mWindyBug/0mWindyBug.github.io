@@ -1004,7 +1004,7 @@ pProcess ProcessEntry = processes::GetProcessEntry(HandleToUlong(ProcessId));
 The system thread waits for two minutes and removes the entry , we also have to "fake" the pid to avoid ambiguity conflicts (i.e. a new process is created with the same pid that have just been terminated.)<br/>
 
 ### Blocking a mapped page writer write 
-As mentioned a process may be able to modify a large number of views before the mapped page writer activates. We can't prevent those writes by killing the process , the writes have already been "scheduled" as the PTEs are marked as dirty. <br/> Once we know a ransomware is executing, and is using memory mapped I/O to encrypt files, ideally we'd like to prevent any write to a file that is backed by a R/W section created by the active ransomware.<br/> We cant block the write (i.e. by returning access denied and FLT_PREOP_COMPLETE) as in such case  the PFN will remain modified - inevtibaly causing the mapped page writer to trigger again.
+As mentioned a process may be able to modify a large number of views before the mapped page writer activates. We can't prevent those modifications by killing the process , the paging writes have already been "scheduled" as the PTEs are marked as dirty. <br/> Once we know a ransomware is executing, and is using memory mapped I/O to encrypt files, ideally we'd like to prevent any modification to a file that is backed by a R/W section created by a process we classify as ransomware.<br/> We cant block the write (i.e. by returning access denied and FLT_PREOP_COMPLETE) as in such case  the PFN will remain modified - inevtibaly causing the mapped page writer to trigger again.
 One option could be to lie and "successfully" complete the IRP :
 
 ```cpp
@@ -1012,7 +1012,7 @@ Data->Iosb.Status = STATUS_SUCCESS;
 Data->Iosb.Information = Data->Iopb->Parameters.Write.Length;
 return FLT_PREOP_COMPLETE
 ```
-Whilst it will indeed prevent the write, it can lead to major cache coherncey issues eventually causing applications to fail and potentially the machine to crash.<br/>
+Whilst it will indeed prevent the modification, it can lead to major cache coherncey issues eventually causing applications to fail and potentially the machine to crash.<br/>
 
 
 #### Test against Maze 
