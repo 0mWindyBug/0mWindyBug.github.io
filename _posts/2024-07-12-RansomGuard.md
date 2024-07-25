@@ -178,7 +178,6 @@ typedef struct _FLT_CONTEXT_REGISTRATION {
 ```
 The ```ContextCleanupCallback``` is called right before the context goes away ,  useful for releasing internal context resources <br/> 
 
-
 ## The NT cache manager 
 The windows cache manager is a software-only component which is closely integrated with the windows memory manager , to make file-system data accessible within the virtual memory system <br/>
 Although constant advances in storage technologies have led to faster and
@@ -212,7 +211,6 @@ Why do we care ? it's important to keep caching in mind before we are moving on 
 Paging I/O is essentially a term used to describe I/O initiated by either the Mm or Cc. For paging reads , it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages , the read is of course non cached as it must be satisifed from storage.<br/>
 For paging writes , it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver , much like with a paging read , to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write<br/> 
 Again , keep these in mind : ) 
-
 
 ## Ransomware variations 
 We have to consider all the variants of the encryption process, as it can happen very differently. <br/>
@@ -270,14 +268,13 @@ The following diagram summerizes RansomGuard's design for evaluating operations 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
 Next , let's walkthrough each filter.<br/> 
-For the full implemntation of the filters : https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuardBeta/RansomGuard/filters.cpp
+For the full implementation of the filters : https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuardBeta/RansomGuard/filters.cpp
 
 ### PreCreate 
-Generally speaking , the PreCreate filter is responsible to filter out any uninteresting I/O requests. For now , we are only interested in 
-file opens for R/W ,  from usermode (so yes , not filtering new files , altough that's going to change later on in the blogpost). <br/>
+Generally speaking , the PreCreate filter is responsible to filter out any uninteresting I/O requests. For now , we are only interested in file opens for R/W , from usermode (so yea , not filtering new files , altough that going to change later on in the blogpost).<br/>
 In addition , as we've discussed earlier this is our only chance to capture the initial state of truncated files , if the file might get truncated - we read the file , calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.<br/>
-Lastly , we enforce access restrictions : <br/>
-* The restore directory is accessible only from kernel mode.
+Lastly , also use this filter to enforce access restrictions : <br/>
+* The restore directory shpould be accessible only from kernel mode.
   - The user can connect to RansomGuard's filter port and issue a control to copy the files to a user-accesible location. <br/>
 * A process marked as malicious(ransomware) is blocked from any file-system access.
 <br/>
@@ -318,7 +315,7 @@ Let's walkthrough the code , starting with the encforcment of file-system access
 		return FLT_PREOP_COMPLETE;
 	}
 ```
-Not interested in requests from kernel mode or not for writing : 
+we are not interested in requests from kernel mode or not for writing  : 
 ```cpp
 	// Skip kernel mode or non write requests
 	const auto& params = Data->Iopb->Parameters.Create;
@@ -326,7 +323,7 @@ Not interested in requests from kernel mode or not for writing :
 		|| (params.SecurityContext->DesiredAccess & FILE_WRITE_DATA) == 0 )
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
-Dealing with TRUNCATE_EXISTING opens : 
+handling TRUNCATE_EXISTING opens : 
 ```cpp
 	ULONG Options = params.Options;
 
@@ -347,7 +344,6 @@ Dealing with TRUNCATE_EXISTING opens :
 	// if file might get truncated 
 	if (CreateDisposition == FILE_OVERWRITE || CreateDisposition == FILE_OVERWRITE_IF || CreateDisposition == FILE_SUPERSEDE)
 	{
-
 		FilterFileNameInformation FileNameInfo(Data);
 		PFLT_FILE_NAME_INFORMATION NameInformation = FileNameInfo.Get();
 		if (!NameInformation)
@@ -364,12 +360,10 @@ Dealing with TRUNCATE_EXISTING opens :
 		}
 
 		CreateContx->CalculatedEntropy = true;
-
 	}
 	*CompletionContext = CreateContx;
 	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 }
-
 ```
 
 A process notify routine managed linked list is used to track active processes in the system and maintain process state across different file-system operations, each process described by the following struct : <br/>
@@ -394,7 +388,7 @@ typedef struct _Process
 Since we use a statistical logic to identify encryption , we set a threshold of encrypted files by a process in which we consider it as ransomware, the ```EncryptedFiles``` counter is used for that matter, the rest of the structure will make sense later on in the blogpost. <br/> 
 
 ### PostCreate 
-Here, if the file is not new (for now) and if the file-system supports FileObject contexts for the given operation(not supported in the paging I/O path) -  we initialize our FileObject context structure :
+In our PostCreate filter , if the file is not new and the file-system supports FileObject contexts for the given operation(not supported in the paging I/O path) -  we initialize our FileObject context structure and attach it to the file object:
 
 ```cpp
 typedef struct _HandleContext
