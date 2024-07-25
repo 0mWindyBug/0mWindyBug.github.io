@@ -287,7 +287,7 @@ Lastly , we enforce access restrictions : <br/>
 * A process marked as malicious(ransomware) is blocked from any file-system access.
 <br/>
 
-Enforcing file-system access restrictions : 
+Let's walkthrough the code , starting with the encforcment of file-system access restrictions : 
 ```cpp
 	// block any file-system access by malicious processes 
 	ProcessesListMutex.Lock();
