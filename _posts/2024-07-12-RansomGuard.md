@@ -670,7 +670,7 @@ Knowing WannaCry follows the CreateFile -> ReadFile -> WriteFile -> CloseFile se
 
 
 ## Filtering Memory Mapped I/O 
-Usage of memory mapped files to perform the encryption becomes more and more common around ransomware families, which makes it harder for behavior based anti-ransomware solutions to keep track of what is going on, as mentioned this is due to the nature of memory mapped I/O.<br/>
+Usage of memory mapped files to perform the encryption has become more and more common around ransomware families over the years, which makes it harder for behavior based anti-ransomware solutions to keep track of what is going on, as mentioned this is due to the nature of memory mapped I/O.<br/>
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence2.png" alt="">
 
 A file mapping is essentially a section object , with CreateFileMapping being a wrapper around NtCreateSection.<br/>
@@ -886,7 +886,6 @@ auto& WriteParams = Data->Iopb->Parameters.Write;
 			RtlCopyMemory(DataCopy,
 				DataToBeWritten,
 				WriteParams.Length);
-
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) {
 			FltReleaseContext(FileContx);
@@ -943,7 +942,7 @@ Now that we have two datapoints we can evaluate the contents in the buffers :
 ```
 If the oepration is synchrnous, business as usual as we are in the caller's context. otherwise we call ```processes::UpdateEncryptedFilesAsync``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
 
-Theortically , there's a chance for a process to modify thousands of file mappings and terminate before the mapped page writer have been activated. When terminated , our process notify routine is invoked and the process structure is freed - we lose all tracking information we had on that process, to handle it , if the process terminated has created more than a threshold number of R/W sections , it's removal from the list is deffered to a dedicated system thread : 
+Theortically , there's a chance for a process to modify thousands of file mappings and terminate before the mapped page writer activates. Rewind when a process is terminated , our process notify routine is invoked and the process entry structure is freed - we lose all tracking information we had on that process.<br/> To handle such case , if the process terminated has created more than a threshold number of R/W sections , it's removal from the list is deffered to a dedicated system thread : 
 ```cpp
 pProcess ProcessEntry = processes::GetProcessEntry(HandleToUlong(ProcessId));
 		if (!ProcessEntry)
@@ -968,7 +967,7 @@ pProcess ProcessEntry = processes::GetProcessEntry(HandleToUlong(ProcessId));
 The system thread waits for two minutes and removes the entry , we also have to "fake" the pid to avoid ambiguity conflicts (i.e. a new process is created with the same pid that have just been terminated.)<br/>
 
 ### Blocking a mapped page writer write 
-As mentioned a process may be able to modify a large number of views before the mapped page writer activates. We can't prevent those modifications by killing the process , the paging writes have already been "scheduled" as the PTEs are marked as dirty. <br/> Once we know a ransomware is executing, and is using memory mapped I/O to encrypt files, ideally we'd like to prevent any modification to a file that is backed by a R/W section created by a process we classify as ransomware.<br/> We cant block the write (i.e. by returning access denied and FLT_PREOP_COMPLETE) as in such case  the PFN will remain modified - inevtibaly causing the mapped page writer to trigger again.
+As mentioned a process may be able to modify a large number of views before the mapped page writer activates. We can't prevent those modifications by killing the process , the paging writes have already been "scheduled" as the PTEs are marked as dirty. <br/> Once we know a ransomware is executing, and is using memory mapped I/O to encrypt files, we'd like to prevent any modification to a file that is backed by a R/W section created by the process classified as ransomware.<br/> We cant block the write (i.e. by returning access denied and FLT_PREOP_COMPLETE) as in such case  the PFN will remain modified - inevtibaly causing the mapped page writer to trigger again.
 One option could be to lie and "successfully" complete the IRP :
 
 ```cpp
