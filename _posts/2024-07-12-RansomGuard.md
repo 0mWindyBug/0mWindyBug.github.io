@@ -7,7 +7,7 @@ excerpt: "Anti Ransomware minifilter driver"
 
 
 ## Intro
-Ransomware is one of the most simple - yet significant threats facing organizations today.<br />
+Ransomware is one of the most simple - yet significant threats facing organizations today.<br/>
 Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it -  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat.<br /> 
 Today's blogpost is going to walkthrough the  design of RansomGuard - a fun open source anti-ransomware filter driver we developed, as well as covering the required internals.<br />
 
@@ -274,7 +274,8 @@ Any I/O operations (excluding paging I/O , IRP_MJ_QUERY_INFORMATION and apparent
 The following diagram summerizes RansomGuard's design for evaluating operations across the same handle.<br/>
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
-Next , let's walkthrough each filter - we will hightlight key code blocks from each, for the full implementation see the project's repo.<br/> 
+Next , let's walkthrough each filter.<br/> 
+For the full implemntation of the filters : https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuardBeta/RansomGuard/filters.cpp
 
 ### PreCreate 
 Generally speaking , the PreCreate filter is responsible to filter out any uninteresting I/O requests. For now , we are only interested in 
@@ -286,24 +287,9 @@ Lastly , we enforce access restrictions : <br/>
 * A process marked as malicious(ransomware) is blocked from any file-system access.
 <br/>
 
+Enforcing file-system access restrictions : 
 ```cpp
-
-FLT_PREOP_CALLBACK_STATUS
-filters::PreCreate(
-	_Inout_ PFLT_CALLBACK_DATA Data,
-	_In_ PCFLT_RELATED_OBJECTS FltObjects,
-	_Flt_CompletionContext_Outptr_ PVOID* CompletionContext
-)
-{
-	UNREFERENCED_PARAMETER(CompletionContext);
-
-	ULONG FileSize = 0;
-	ULONG_PTR stackLow;
-	ULONG_PTR stackHigh;
-	NTSTATUS status;
-	PFILE_OBJECT FileObject = Data->Iopb->TargetFileObject;
-
-	// block any file-system access by malicious processes or to our restore directory 
+	// block any file-system access by malicious processes 
 	ProcessesListMutex.Lock();
 	pProcess ProcessInfo = processes::GetProcessEntry(FltGetRequestorProcessId(Data));
 	if (ProcessInfo)
@@ -328,8 +314,6 @@ filters::PreCreate(
 	status = FileNameInfo.Parse();
 	if (!NT_SUCCESS(status))
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
-
 	
 	if (restore::IsRestoreParentDir(FileNameInfo->ParentDir) && Data->RequestorMode == UserMode)
 	{
@@ -338,37 +322,17 @@ filters::PreCreate(
 		Data->IoStatus.Information = 0;
 		return FLT_PREOP_COMPLETE;
 	}
-
-
-	//  Stack file objects are never scanned
-	IoGetStackLimits(&stackLow, &stackHigh);
-
-	if (((ULONG_PTR)FileObject > stackLow) &&
-		((ULONG_PTR)FileObject < stackHigh)) 
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
-	//  Directory opens don't need to be scanned.
-	if (FlagOn(Data->Iopb->Parameters.Create.Options, FILE_DIRECTORY_FILE))
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
-	//  Skip pre-rename operations which always open a directory.
-	if (FlagOn(Data->Iopb->OperationFlags, SL_OPEN_TARGET_DIRECTORY))
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
-	//  Skip paging files.
-	if (FlagOn(Data->Iopb->OperationFlags, SL_OPEN_PAGING_FILE)) 
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
-	//  Skip scanning DASD opens 
-	if (FlagOn(FltObjects->FileObject->Flags, FO_VOLUME_OPEN)) 
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
+```
+Not interested in requests from kernel mode or not for writing : 
+```cpp
 	// Skip kernel mode or non write requests
 	const auto& params = Data->Iopb->Parameters.Create;
 	if (Data->RequestorMode == KernelMode
 		|| (params.SecurityContext->DesiredAccess & FILE_WRITE_DATA) == 0 )
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
+```
+Dealing with TRUNCATE_EXISTING opens : 
+```cpp
 	ULONG Options = params.Options;
 
 	// if file might going to be truncated in post create try to read it now
@@ -716,7 +680,7 @@ From the ransomware perspective this is great , the actual write to the file see
 Our goal is to be able not only to detect those mapped page writer encryptions , but to be able to pinpoint back at the malicious process behind it.<br/>
 
 ### Synhcrnous Flush 
-Whilst I personally haven't seen such usage in ransomwares, an application can call explictly ```FlushViewOfFile``` to flush changes back to storage synchrnously , in which case the nature of the paging write is different.<br/>
+Whilst I personally haven't seen such usage in ransomwares, an application can explictly call  ```FlushViewOfFile``` to flush changes back to storage synchrnously , in which case the nature of the paging write is different.<br/>
 ```FlushViewOfFile``` maps to ```MmFlushVirtualMemory``` in ntos , which in turn calls ```MmFlushSectionInternal``` as shown below : <br/>
 <img src="{{ site.url }}{{ site.baseurl }}/images/AcquireCc.png" alt="">
 
