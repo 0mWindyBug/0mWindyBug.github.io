@@ -434,7 +434,7 @@ Checking for FileObject context support and filtering out new files :
 	const auto& params = Data->Iopb->Parameters.Create;
 
 ```
-
+Allocating , initializing and attaching a context to the FileObject : 
 ```cpp
 	pHandleContext HandleContx = nullptr;
 	NTSTATUS status = FltAllocateContext(FltObjects->Filter, FLT_STREAMHANDLE_CONTEXT, sizeof(HandleContext), NonPagedPool, reinterpret_cast<PFLT_CONTEXT*>(&HandleContx));
