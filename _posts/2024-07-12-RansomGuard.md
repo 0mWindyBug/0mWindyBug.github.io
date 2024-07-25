@@ -418,19 +418,8 @@ typedef struct _HandleContext
 }HandleContext, * pHandleContext;
 
 ```
-and attach it to the FileObject , nothing complex.<br/>
-
+Checking for FileObject context support and filtering out new files : 
 ```cpp
-FLT_POSTOP_CALLBACK_STATUS
-filters::PostCreate(
-	_Inout_ PFLT_CALLBACK_DATA Data,
-	_In_ PCFLT_RELATED_OBJECTS FltObjects,
-	_In_opt_ PVOID CompletionContext,
-	_In_ FLT_POST_OPERATION_FLAGS Flags
-)
-
-{
-
 	pCreateCompletionContext PreCreateInfo = (pCreateCompletionContext)CompletionContext;
 
 	if (Flags & FLTFL_POST_OPERATION_DRAINING || !FltSupportsStreamHandleContexts(FltObjects->FileObject) || Data->IoStatus.Information == FILE_DOES_NOT_EXIST)
@@ -444,7 +433,9 @@ filters::PostCreate(
 
 	const auto& params = Data->Iopb->Parameters.Create;
 
+```
 
+```cpp
 	pHandleContext HandleContx = nullptr;
 	NTSTATUS status = FltAllocateContext(FltObjects->Filter, FLT_STREAMHANDLE_CONTEXT, sizeof(HandleContext), NonPagedPool, reinterpret_cast<PFLT_CONTEXT*>(&HandleContx));
 	if (!NT_SUCCESS(status))
@@ -454,89 +445,10 @@ filters::PostCreate(
 		FltFreePoolAlignedWithTag(FltObjects->Instance, CompletionContext, TAG);
 		return FLT_POSTOP_FINISHED_PROCESSING;
 	}
+	...
+	// initialization of context stripped for readabilty , check out filters.cpp for the initialization code.
+	...
 
-	// init context
-	HandleContx->Instance = FltObjects->Instance;
-	HandleContx->Filter = FltObjects->Filter;
-	HandleContx->RequestorPid  = FltGetRequestorProcessId(Data);
-	HandleContx->PostEntropy = INVALID_ENTROPY;
-	HandleContx->PreEntropy = INVALID_ENTROPY;
-	HandleContx->OriginalContent = nullptr;
-	HandleContx->InitialFileSize = 0;
-	HandleContx->FinalComponent.Buffer = nullptr;
-	HandleContx->FileName.Buffer = nullptr;
-	HandleContx->WriteOccured = false;
-	HandleContx->SavedContent = PreCreateInfo->SavedContent;
-
-	// if entropy was already calculated modify the default context 
-	if (PreCreateInfo->CalculatedEntropy)
-	{
-		HandleContx->WriteOccured = true; 
-		HandleContx->PreEntropy = PreCreateInfo->PreEntropy;
-	}
-	if (PreCreateInfo->SavedContent)
-	{
-		HandleContx->OriginalContent = PreCreateInfo->OriginalContent;
-		HandleContx->InitialFileSize = PreCreateInfo->InitialFileSize;
-	}
-
-	// all pre create info has been moved to the handle context
-	FltFreePoolAlignedWithTag(FltObjects->Instance, CompletionContext, TAG);
-
-	FilterFileNameInformation FileNameInfo(Data);
-	PFLT_FILE_NAME_INFORMATION NameInformation = FileNameInfo.Get();
-	
-	if (!NameInformation)
-	{
-		FltReleaseContext(HandleContx);
-		return FLT_POSTOP_FINISHED_PROCESSING;
-	}
-	HandleContx->FileName.Length = NameInformation->Name.Length;
-	HandleContx->FileName.MaximumLength = NameInformation->Name.MaximumLength;
-	if (NameInformation->Name.MaximumLength <= 0)
-	{
-		FltReleaseContext(HandleContx);
-		return FLT_POSTOP_FINISHED_PROCESSING;
-	}
-
-	HandleContx->FileName.Buffer = (PWCHAR)ExAllocatePoolWithTag(NonPagedPool, HandleContx->FileName.MaximumLength, TAG);
-	if (!HandleContx->FileName.Buffer)
-	{
-		FltReleaseContext(HandleContx);
-		return FLT_POSTOP_FINISHED_PROCESSING;
-	}
-	
-	PUNICODE_STRING FileName = &NameInformation->Name;
-	if (!FileName || !FileName->Buffer)
-	{
-		FltReleaseContext(HandleContx);
-		return FLT_POSTOP_FINISHED_PROCESSING;
-	}
-	RtlCopyUnicodeString(&(HandleContx->FileName), FileName);
-
-	HandleContx->FinalComponent.Length = NameInformation->FinalComponent.Length;
-	HandleContx->FinalComponent.MaximumLength = NameInformation->FinalComponent.MaximumLength;
-	if (NameInformation->FinalComponent.MaximumLength <= 0)
-	{
-		FltReleaseContext(HandleContx);
-		return FLT_POSTOP_FINISHED_PROCESSING;
-	}
-
-	HandleContx->FinalComponent.Buffer = (PWCHAR)ExAllocatePoolWithTag(NonPagedPool, HandleContx->FinalComponent.MaximumLength, TAG);
-	if (!HandleContx->FinalComponent.Buffer)
-	{
-		FltReleaseContext(HandleContx);
-		return FLT_POSTOP_FINISHED_PROCESSING;
-	}
-
-	PUNICODE_STRING FinalComponent = &NameInformation->FinalComponent;
-	if (!FinalComponent || !FinalComponent->Buffer)
-	{
-		FltReleaseContext(HandleContx);
-		return FLT_POSTOP_FINISHED_PROCESSING;
-	}
-
-	RtlCopyUnicodeString(&(HandleContx->FinalComponent), &NameInformation->FinalComponent);
 	status = FltSetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, FLT_SET_CONTEXT_KEEP_IF_EXISTS, reinterpret_cast<PFLT_CONTEXT>(HandleContx), nullptr);
 	if (!NT_SUCCESS(status))
 	{
