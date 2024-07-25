@@ -9,14 +9,12 @@ excerpt: "Anti Ransomware minifilter driver"
 ## Intro
 Ransomware is one of the most simple - yet significant threats facing organizations today.<br/>
 Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it -  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat.<br /> 
-Today's blogpost is going to walkthrough the  design of RansomGuard - a fun open source anti-ransomware filter driver we developed, as well as covering the required internals.<br />
-
+Today's blogpost is going to walkthrough the design of RansomGuard - an anti-ransomware filter driver we developed , as well as cover some internals related to ransomware file-system operations.<br/>
 
 ## Entropy 
 Entropy is a measure of randomness within a set of data. When referenced in the context of information theory and cybersecurity, most people are referring to Shannon Entropy.<br /> This is a specific algorithm that returns a value between 0 and 8 were values near 8 indicate that the data is very random, while values near 0 indicate that the data is very homodulous.<br /> 
-Shannon entropy can be a good indicator for detecting the use of packing, compression, and encryption of a file.<br />  Each of the previously mentioned techniques tends to increase the overall entropy of a file. This makes sense intuitively. Let’s take compression for example.<br />  Compression algorithms reduce the size of certain types of data by replacing duplicated parts with references to a single instance of that part. The end result is a file with less duplicated contents. The less duplication there is in a file, the higher the entropy will be because the data is less predictable than it was before.<br /> 
-we are going to use entropy as a measure to detect encryption of data <br /> 
-the following function gets a pointer to some data and it's size and returns it's shannon entropy value :<br />
+Shannon entropy can be a good indicator for detecting the use of packing, compression, and encryption of a file.<br />  Each of the previously mentioned techniques tends to increase the overall entropy of a file. This makes sense intuitively. Let’s take compression for example.<br />  Compression algorithms reduce the size of certain types of data by replacing duplicated parts with references to a single instance of that part. The end result is a file with less duplicated contents. The less duplication there is in a file, the higher the entropy will be because the data is less predictable than it was before. we are going to use entropy as a measure to detect encryption of data.<br/> 
+The following function gets a pointer to some data and it's size and returns it's shannon entropy value :<br/>
 ```cpp
 double utils::CalculateEntropy(PVOID Buffer, size_t Size)
 {
@@ -57,15 +55,11 @@ double utils::CalculateEntropy(PVOID Buffer, size_t Size)
 }
 ```
 
-#### Statistics  
-
-
-
 ## The filter manager 
-The filter manager provides a level of abstraction allowing driver developers to invest more time into the actual logic of the filter rather than writing a body of "boiler plate" code - speaking of boiler plate code , writing a legacy file-system filter driver that ** does nothing ** can take up to nearly 6,000 lines of code. <br/>
-The filter manager is essentially a comprehensive “framework” for writing file system filter drivers.<br/> The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys). <br/>
-As I/O requests arrive at the filter  manager legacy filter Device Object, filter manager calls the minifilters using a call out model.<br/> After each minifilter processes the request, the filter manager then calls through to the next device object in the device stack. <br />
-It's important to note that easy to write does not mean easy to design , which remains a fairly complex task with minifilters, of course - depending on the minifilter's task. Nevertheless it makes it possible to go from design to a working filter in weeks rather than months, which is great. <br />
+The filter manager provides a level of abstraction allowing driver developers to invest more time into the actual logic of the filter rather than writing a body of "boiler plate" code.<br/> Speaking of boiler plate code , writing a legacy file-system filter driver that really **does nothing** can take up to nearly 6,000 lines of code. <br/>
+The filter manager is essentially a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.<br/>
+After each minifilter processes the request, the filter manager then calls through to the next device object in the device stack , if any.<br/>
+It's important to note that easy to write does not mean easy to design , which remains a fairly complex task with minifilters, of course - depending on the minifilter's task in hand... Nevertheless it makes it possible to go from design to a working filter in weeks rather than months, which is great. <br />
 
 
 ## Filtering file-system opertions 
@@ -222,20 +216,21 @@ Again , keep these in mind : )
 
 ## Ransomware variations 
 We have to consider all the variants of the encryption process, as it can happen very differently. <br/>
-The most popular variation is where
-the files are opened in R/W, read and encrypted in place, closed, and then (optionally) renamed. <br/> Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it can be more evasive as the write is initiated by the system process rather than the malicious one. <br/> This trick alone was enough for Maze and other ransomware families to evade security solutions. <br/>
+The most popular variation is where the files are opened in R/W, read and encrypted in place, closed, and then (optionally) renamed.<br/> 
+Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it is considered more evasive as the write is initiated by the system process rather than the malicious one (tbh anything asynchrnous is harder to deal with from a defensive point of view), this trick alone was enough for Maze, LockFile and others to evade security solutions.<br/>
 Yet another way could be creating a copy of the file with the new name , opened for W, the original file is read, its encrypted content is written inside and the original file is deleted.<br/>
-Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly  implemented in ransomwares in the wild. <br/> 
+Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly implemented by ransomwares in the wild.<br/> 
 
 ## Driver Verifier 
-Before starting to write our driver , let's talk about verifier briefly. <br/> Driver Verifier can subject Windows drivers to a variety of stresses and tests to find improper behavior. You can configure which tests to run, which allows you to put a driver through heavy stress loads and enforce edge cases. <br/>
+Before starting to write our driver , let's talk about verifier briefly. Driver Verifier can subject Windows drivers to a variety of stresses and tests to find improper behavior. You can configure which tests to run, which allows you to put a driver through heavy stress loads and enforce edge cases.<br/>
 For a detailed description regarding the various checks avaliable , visit [OSR's post](https://www.osronline.com/article.cfm%5Earticle=325.htm) .<br/>
-Enabling verifier during the development process is extremley important for writing a quality driver, note that when writing a minifilter you should enable it for both your driver and the fltmgr. <br/>
+Enabling verifier during the development process is extremley important for writing a quality driver and debugging efficiently.<br/>
+Note that when writing a minifilter you should enable it for both your driver and the fltmgr. <br/>
 
 ## Detecting encryption 
-We already mentioned entropy as a measure to identify encryption of data, what we also mentioned is the fact compressed data tends to have high entropy.<br/> To identify encryption has taken place we need to collect two datapoints. 
-First, that represents the initial entropy of the contents of the file, and second that represents the entropy of the contents of the file after modifcation.<br/> 
-Based on statistical tests with a large set of files of different types, we came up with the following measurement, that takes into consideration the initial entropy of the file.<br/>
+We already mentioned entropy as a measure to identify encryption of data, what we also mentioned is the fact compressed data tends to have high entropy.<br/>
+To identify encryption has taken place we need to collect two datapoints. First, that represents the initial entropy of the contents of the file, and second that represents the entropy of the contents of the file after modifcation.<br/> 
+Based on statistical tests against a large set of files of different types, we came up with the following measurement, that takes into consideration the initial entropy of the file.<br/>
 
 ```cpp
 // statistical logic to determine encryption 
