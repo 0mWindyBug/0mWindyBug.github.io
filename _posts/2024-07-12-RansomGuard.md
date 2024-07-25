@@ -263,7 +263,43 @@ There a few things to consider:<br/>
 Considering #1, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of FILE_SUPERSEDE , FILE_OVERWRITE or FILE_OVERWRITE_IF. in such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
 Considering #2 , the post modification state of the file is captured whenever whenever IRP_MJ_CLEANUP is sent.<br/>
 that is, whenever the last handle to a file object is closed (represents the usermode state), in contrast IRP_MJ_CLOSE is sent whenever the last reference is released from the file object (represents the system state). <br/>
-Any I/O operations (excluding paging I/O , IRP_MJ_QUERY_INFORMATION and apparently reads) are illegal after cleanup has completed, so it's safe to assume the file will not be modified (again , excluding paging I/O - we will deal with that later)  after the handle is closed by the user, hence we are going to use post cleanup as our second datapoint.<br/>
+Whenever I need a reminder of what's allowed in PostCleanup , I go to the FAT source code and look for the check it does. The following can be seen in the ```FatCheckIsOperationLegal``` :
+```cpp
+        //
+    //  If the file object has already been cleaned up, and
+    //
+    //  A) This request is a paging io read or write, or
+    //  B) This request is a close operation, or
+    //  C) This request is a set or query info call (for Lou)
+    //  D) This is an MDL complete
+    //
+    //  let it pass, otherwise return STATUS_FILE_CLOSED.
+    //
+
+    if ( FlagOn(FileObject->Flags, FO_CLEANUP_COMPLETE) ) {
+
+        PIO_STACK_LOCATION IrpSp = IoGetCurrentIrpStackLocation( Irp );
+
+        if ( (FlagOn(Irp->Flags, IRP_PAGING_IO)) ||
+             (IrpSp->MajorFunction == IRP_MJ_CLOSE ) ||
+             (IrpSp->MajorFunction == IRP_MJ_SET_INFORMATION) ||
+             (IrpSp->MajorFunction == IRP_MJ_QUERY_INFORMATION) ||
+             ( ( (IrpSp->MajorFunction == IRP_MJ_READ) ||
+                 (IrpSp->MajorFunction == IRP_MJ_WRITE) ) &&
+               FlagOn(IrpSp->MinorFunction, IRP_MN_COMPLETE) ) ) {
+
+            NOTHING;
+
+        } else {
+
+            FatRaiseStatus( IrpContext, STATUS_FILE_CLOSED );
+        }
+    }
+   
+```
+Of course other file systems might allow other things, but FAT is always a good baseline.<br/>
+Clearly , a non paging write is not allowed , so it's safe to assume the file will not be modified (again , excluding paging I/O - we will deal with that later)  after the handle is closed by the user which makes post cleanup good enough to use as our second datapoint.<br/>
+
 The following diagram summerizes RansomGuard's design for evaluating operations across the same handle.<br/>
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
@@ -728,7 +764,7 @@ pFileContext FileContx;
 		if (!NT_SUCCESS(status))
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
-Since the mapped page write only initiates one write , we can reliably capture both of our datapoints already in pre write, we know about the state of the file before the write and we know what is going to be written.<br/>
+Since the mapped page writer flush takes percisley one write , we can reliably capture both of our datapoints already in pre write, we know about the state of the file before the write and we know what is going to be written.<br/>
 RansomGuard simulates the write in memory as shown below: 
 ```cpp
 auto& WriteParams = Data->Iopb->Parameters.Write;
