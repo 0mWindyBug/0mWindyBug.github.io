@@ -450,7 +450,7 @@ Allocating , initializing and attaching a context to the FileObject :
 ```
 
 ### PreWrite 
-If the FileObject is monitored (has a context attached to it) , and if it's the first write using the FileObject , capture the initial state of the file.<br/>
+If the FileObject is monitored (has a context attached to it) , and if it's the first write using the FileObject , capture the initial state of the file. <br/>
 
 ```cpp
 // filtering logic for any I/O other than noncached paging I/O 
@@ -464,8 +464,6 @@ If the FileObject is monitored (has a context attached to it) , and if it's the 
 	// this is true if the file was opened as truncated or it's not the first write using the handle 
 	if (HandleContx->WriteOccured)
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
-	
 
 	HandleContx->WriteOccured = true;
 	
@@ -841,9 +839,9 @@ Now that we have two datapoints we can evaluate the contents in the buffers :
 		}
 
 ```
-If the oepration is synchrnous, business as usual as we are in the caller's context. otherwise we call ```processes::UpdateEncryptedFilesAsync``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
+If the operation is synchrnous, business as usual as we are in the caller's context. otherwise we call ```processes::UpdateEncryptedFilesAsync``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
 
-Theortically , there's a chance for a process to modify thousands of file mappings and terminate before the mapped page writer activates. Rewind when a process is terminated , our process notify routine is invoked and the process entry structure is freed - we lose all tracking information we had on that process.<br/> To handle such case , if the process terminated has created more than a threshold number of R/W sections , it's removal from the list is deffered to a dedicated system thread : 
+In theory , there's a chance for a process to modify thousands of file mappings and terminate before the mapped page writer activates. Rewind when a process is terminated , our process notify routine is invoked and the process entry structure is freed - we lose all tracking information we had on that process.<br/> To handle such case , if the process terminated has created more than a threshold number of R/W sections , it's removal from the list is deffered to a dedicated system thread : 
 ```cpp
 pProcess ProcessEntry = processes::GetProcessEntry(HandleToUlong(ProcessId));
 		if (!ProcessEntry)
@@ -877,7 +875,43 @@ Data->Iosb.Information = Data->Iopb->Parameters.Write.Length;
 return FLT_PREOP_COMPLETE
 ```
 Whilst it will indeed prevent the modification, it can lead to major cache coherncey issues eventually causing applications to fail and potentially the machine to crash.<br/>
+Instead we are going to take the apprach below , the comment describes it well enough : 
+```cpp
+		// if a malicious process has a R/W section object to this file we want to prevent the modification
+		// we cant simply deny the write as the page will remain dirty which will cause the MPW to trigger again later 
+		// for a *cached* write the Cc memory maps the file and copies the user data into the mapping 
+		// if someone else then comes and memory maps the file the mapping will use the same physical pages backing the Cc mapping 
+		// when flushing dirty pages the os builds an MDL to describe the same physical pages (again, same physical pages Cc uses for the file)
+		// knowing that , modifying the buffer directly will cause everyone with the mapping to see the changes 
+		// take encryption drivers for example, this is an issue as the intent is to only protect the data on disk 
+		// in this case , we don't mind manipulating the buffer directly, as otherwise the ransomware will just corrupt the data anyway...
 
+		if (processes::CheckForMaliciousSectionOwner(&FileContx->FileName))
+		{
+			SIZE_T BytesToWrite = (WriteParams.Length >= FileSize) ? FileSize : WriteParams.Length;
+			PVOID  OverwrittenDiskContent = (PVOID)((ULONG_PTR)DiskContent + WriteParams.ByteOffset.QuadPart);
+			__try
+			{
+				__try
+				{
+					
+					RtlCopyMemory(DataToBeWritten,OverwrittenDiskContent, BytesToWrite);
+					DbgPrint("[*] prevented modification to %wZ by malicious process \n", FileContx->FileName);
+				}
+				__except (EXCEPTION_EXECUTE_HANDLER)
+				{
+					DbgPrint("[*] exception in attempt to prevent modification to %wZ by malicious process\n",FileContx->FileName);
+				}
+			}
+			__finally
+			{
+				FltReleaseContext(FileContx);
+				ExFreePoolWithTag(DiskContent, TAG);
+				ExFreePoolWithTag(DataCopy, TAG);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
+		}
+```
 
 #### Test against Maze 
 
