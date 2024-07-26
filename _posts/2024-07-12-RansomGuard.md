@@ -950,7 +950,7 @@ Instead we are going to take the apprach below , the comment describes it well e
 ```
 
 #### RansomGuard against Maze 
-RansomGuard deals with Maze comfortably , for a deatiled description of Maze check Sophos's blogpost out : visit [Sophos's post](https://news.sophos.com/en-us/2020/05/12/maze-ransomware-1-year-counting/ ). <br/>
+RansomGuard deals with Maze comfortably , for a deatiled description of Maze check Sophos's blogpost out :  [Sophos's post](https://news.sophos.com/en-us/2020/05/12/maze-ransomware-1-year-counting/ ). <br/>
 * 11 files encrypted , 10 of which RansomGuard restored
 * Maze successfully killed 
 * Debug output :
