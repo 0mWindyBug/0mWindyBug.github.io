@@ -953,8 +953,9 @@ Instead we are going to take the apprach below , the comment describes it well e
 RansomGuard deals with Maze comfortably , for a deatiled description of Maze check Sophos's blogpost out : visit [Sophos's post](https://news.sophos.com/en-us/2020/05/12/maze-ransomware-1-year-counting/ ). <br/>
 * 11 files encrypted , 10 of which RansomGuard restored
 * Maze successfully killed 
-* Debug output : 
-```yaml 
+* Debug output :
+```yaml
+
 00000481	257.80279541	[*] R/W section is created for \Device\HarddiskVolume3\$Recycle.Bin\S-1-5-21-1519848365-1663756913-3822597310-1001\$RAL6GT6\htb-job1 - Copy.png		
 00000484	258.02233887	[*] backed up htb-job1 - Copy.png	
 00000485	258.02896118	[*] \Device\HarddiskVolume3\$Recycle.Bin\S-1-5-21-1519848365-1663756913-3822597310-1001\$RAL6GT6\htb-job1 - Copy.png encrypted by 552	
