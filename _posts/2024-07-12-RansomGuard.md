@@ -950,8 +950,54 @@ Instead we are going to take the apprach below , the comment describes it well e
 ```
 
 #### Test against Maze 
+```yaml 
+00000481	257.80279541	[*] R/W section is created for \Device\HarddiskVolume3\$Recycle.Bin\S-1-5-21-1519848365-1663756913-3822597310-1001\$RAL6GT6\htb-job1 - Copy.png		
+00000484	258.02233887	[*] backed up htb-job1 - Copy.png	
+00000485	258.02896118	[*] \Device\HarddiskVolume3\$Recycle.Bin\S-1-5-21-1519848365-1663756913-3822597310-1001\$RAL6GT6\htb-job1 - Copy.png encrypted by 552	
+00000486	258.03894043	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\Maze.exe -> 1		
+00000516	267.57147217	[*] R/W section is created for \Device\HarddiskVolume3\RansomGuard_User_Restore\htb-job1 - Copy.png		
+00000521	267.90890503	[*] backed up htb-job1 - Copy.png	
+00000522	267.91683960	[*] \Device\HarddiskVolume3\RansomGuard_User_Restore\htb-job1 - Copy.png encrypted by 552	
+00000523	267.96432495	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\Maze.exe -> 2	
+00000588	295.95721436	[*] R/W section is created for \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Crypto\Keys\de7cf8a7901d2ad13e5c67c29e5d1662_						162686e5-3e74-454e-a51b-1e4ebdadf298	
+00000592	296.29370117	[*] backed up de7cf8a7901d2ad13e5c67c29e5d1662_162686e5-3e74-454e-a51b-1e4ebdadf298	
+00000593	296.30459595	[*] \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Crypto\Keys\de7cf8a7901d2ad13e5c67c29e5d1662_162686e5-3e74-454e-a51b-1e4ebdadf298 					encrypted by 552	
+00000594	296.31512451	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\Maze.exe -> 3	
+00000598	297.99856567	[*] backed up de7cf8a7901d2ad13e5c67c29e5d1662_162686e5-3e74-454e-a51b-1e4ebdadf298	
+00000599	298.00854492	[*] \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Crypto\Keys\de7cf8a7901d2ad13e5c67c29e5d1662_162686e5-3e74-454e-a51b-1e4ebdadf298 					encrypted by mapped page writer	
+00000600	298.02206421	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\Maze.exe -> 4	
+00000649	313.89920044	[*] R/W section is created for \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Protect\S-1-5-21-1519848365-1663756913-3822597310-1001\0ae5e0a7-afbf-4146-aeb8-916bbc5715e9	
+00000650	313.94641113	[*] [\Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Protect\S-1-5-21-1519848365-1663756913-3822597310-1001\0ae5e0a7-afbf-4146-aeb8-916bbc5715e9] pre paging write 6421 predicted paging write 7570 diff 1150	
+00000651	314.25094604	[*] [\Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Protect\S-1-5-21-1519848365-1663756913-3822597310-1001\0ae5e0a7-afbf-4146-aeb8-916bbc5715e9] pre paging write 5760 predicted paging write 7762 diff 2003	
+00000652	314.37820435	[*] backed up 0ae5e0a7-afbf-4146-aeb8-916bbc5715e9	
+00000653	314.38742065	[*] \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Protect\S-1-5-21-1519848365-1663756913-3822597310-1001\0ae5e0a7-afbf-4146-aeb8-916bbc5715e9 encrypted by mapped page writer	
+00000654	314.40267944	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\Maze.exe -> 5	
+00000700	328.47003174	[*] backed up CameraRoll.library-ms	
+00000701	328.47637939	[*] \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Windows\Libraries\CameraRoll.library-ms encrypted by 552	
+00000702	328.48638916	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\Maze.exe -> 6	
+00000704	329.65780640	[*] R/W section is created for \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Windows\Libraries\Documents.library-ms	
+00000709	329.95840454	[*] backed up Documents.library-ms	
+00000710	329.96768188	[*] \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Windows\Libraries\Documents.library-ms encrypted by 552	
+00000711	329.98110962	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\Maze.exe -> 7	
+00000698	328.15954590	[*] R/W section is created for \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Windows\Libraries\CameraRoll.library-ms	
+00000713	330.46475220	[*] backed up CameraRoll.library-ms	
+00000714	330.47409058	[*] \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Windows\Libraries\CameraRoll.library-ms encrypted by mapped page writer	
+00000715	330.48303223	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\Maze.exe -> 8	
+00000718	330.91784668	[*] R/W section is created for \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Windows\Libraries\Music.library-ms	
+00000721	331.42086792	[*] backed up Music.library-ms	
+00000722	331.42776489	[*] \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Windows\Libraries\Music.library-ms encrypted by 552	
+00000723	331.43615723	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\Maze.exe -> 9	
+00000724	331.66406250	[*] backed up Documents.library-ms	
+00000725	331.67065430	[*] \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Windows\Libraries\Documents.library-ms encrypted by mapped page writer	
+00000726	331.68273926	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\Maze.exe -> 10	
 
-## Filtering file deletions (not implemente)
+00000732	332.89422607	[*] prevented modification to \Device\HarddiskVolume3\Users\dorge\AppData\Roaming\Microsoft\Windows\Libraries\Music.library-ms by malicious process 	
+00000734	333.01222278    [*] killed ransomware process! 
+00000735	333.76620483	[*] waiting two minutes to remove 552 process entry	
+```
+
+
+## Filtering file deletions (not implemented)
 
 
 ## Dealing with variation 3 (not implemented)
