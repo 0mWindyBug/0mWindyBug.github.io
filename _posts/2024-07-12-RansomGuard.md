@@ -954,6 +954,7 @@ RansomGuard deals with Maze comfortably , for a deatiled description of Maze che
 * 11 files encrypted , 10 of which RansomGuard restored
 * Maze successfully killed 
 * Debug output :
+  
 ```yaml
 
 00000481	257.80279541	[*] R/W section is created for \Device\HarddiskVolume3\$Recycle.Bin\S-1-5-21-1519848365-1663756913-3822597310-1001\$RAL6GT6\htb-job1 - Copy.png		
