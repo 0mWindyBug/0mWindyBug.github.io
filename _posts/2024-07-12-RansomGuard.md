@@ -95,8 +95,8 @@ typedef struct _FLT_OPERATION_REGISTRATION {
   PVOID                            Reserved1;
 } FLT_OPERATION_REGISTRATION, *PFLT_OPERATION_REGISTRATION;
 ```
-```MajorFunction``` -> is the operation to filter on (e.g for filtering file reads -> IRP_MJ_READ). <br/>
-``` Flags ``` -> a bitmask of flags specifying when to call the preoperation and postoperation filters ( e.g don't call for paging I/O). <br/>
+```MajorFunction``` -> is the operation to filter on (e.g. for filtering file reads -> IRP_MJ_READ). <br/>
+``` Flags ``` -> a bitmask of flags specifying when to call the preoperation and postoperation filters ( e.g. don't call for paging I/O). <br/>
 ``` PreOperation ```  -> The routine to be called before the operation takes place , with the following prototype: <br/>
 ```cpp
 FLT_PREOP_CALLBACK_STATUS PfltPreOperationCallback(
