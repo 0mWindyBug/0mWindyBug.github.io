@@ -603,8 +603,49 @@ VOID evaluate::EvaluateHandle(PFLT_DEFERRED_IO_WORKITEM FltWorkItem, PFLT_CALLBA
 ```
 where ```processes::UpdateEncryptedFiles``` increases the process's ```EncryptedFiles``` counter and terminates it if the threshold is met.<br/>
 
-Knowing WannaCry follows the CreateFile -> ReadFile -> WriteFile -> CloseFile sequence , lets's test what we have so far against it!
+### RansomGuard against WannaCry 
+Knowing WannaCry follows the CreateFile -> ReadFile -> WriteFile -> CloseFile sequence , we tested what we have so far against it : 
+* 10 files encrypted , 10 of which RansomGuard restored ! 
+* successfully killed WannaCry
+* Debug output : 
 
+```yaml
+00000296	167.18316650	[FltMgr] Mini-filter verification enabled for "RansomGuard" filter.	
+00000297	167.19189453	[*] RansomGuard protection is active!		
+00000391	217.50335693	[*] Encryption Detected	
+00000392	230.13081360	[*] backed up \Device\HarddiskVolume3\Users\dorge\Desktop\9781118127698.jpg	
+00000393	230.14079285	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\WannaCry.exe -> 1		
+00000411	236.85186768	[*] Encryption Detected	
+00000412	236.95446777	[*] backed up \Device\HarddiskVolume3\Users\dorge\Desktop\IMG-20170621-WA0005.jpg	
+00000413	236.96711731	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\WannaCry.exe -> 2		
+00000421	238.28771973	[*] Encryption Detected	
+00000422	238.31800842	[*] backed up \Device\HarddiskVolume3\Users\dorge\Desktop\IMG-20170623-WA0009.jpg	
+00000423	238.32882690	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\WannaCry.exe -> 3	
+00000424	239.00428772	[*] [\Device\HarddiskVolume3\Windows\Prefetch\CMD.EXE-6D6290C5.pf] pre write 7643 post close 7640 diff -3	
+00000427	239.56579590	[*] [\Device\HarddiskVolume3\Users\dorge\Desktop\IMG_20170704_104906.jpg] pre write 7971 post close 8000 diff 29	
+00000428	239.58071899	[*] Encryption Detected	
+00000429	239.69236755	[*] backed up \Device\HarddiskVolume3\Users\dorge\Desktop\IMG_20170704_104906.jpg	
+00000430	239.70263672	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\WannaCry.exe -> 4	
+00000439	241.63113403	[*] Encryption Detected	
+00000440	241.70027161	[*] backed up \Device\HarddiskVolume3\Users\dorge\Desktop\IMG_20180228_170753.jpg	
+00000441	241.71061707	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\WannaCry.exe -> 5	
+00000444	243.08477783	[*] [\Device\HarddiskVolume3\Users\dorge\Desktop\IMG-20141130-WA0000.jpg] pre write 7971 post close 7999 diff 29	
+00000445	243.09956360	[*] Encryption Detected	
+00000446	243.24313354	[*] backed up \Device\HarddiskVolume3\Users\dorge\Desktop\IMG-20141130-WA0000.jpg	
+00000447	243.25639343	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\WannaCry.exe -> 6		
+00000461	248.49011230	[*] Encryption Detected	
+00000462	248.49717712	[*] backed up \Device\HarddiskVolume3\Users\dorge\Desktop\IMG_20190620_082327.jpg	
+00000463	248.50477600	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\WannaCry.exe -> 7	
+00000465	248.52275085	[*] Encryption Detected	
+00000466	248.52947998	[*] backed up \Device\HarddiskVolume3\Users\dorge\Desktop\LICENSE.txt	
+00000467	248.53729248	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\WannaCry.exe -> 8	
+00000468	248.55439758	[*] backed up \Device\HarddiskVolume3\Users\dorge\Desktop\Screenshot_20230308-232838_Gallery.jpg	
+00000469	248.56340027	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\WannaCry.exe -> 9	
+00000473	249.27931213	[*] Encryption Detected	
+00000474	249.43690491	[*] backed up \Device\HarddiskVolume3\Users\dorge\Desktop\Screenshot_20230325-185808_Chrome.jpg	
+00000475	249.44566345	[*] files encrypted by \Device\HarddiskVolume3\Users\dorge\Desktop\WannaCry.exe -> 10	
+00000476	249.45210266	[*] killed ransomware process!	
+```
 
 ## Filtering Memory Mapped I/O 
 Usage of memory mapped files to perform the encryption has become more and more common around ransomware families over the years, which makes it harder for behavior based anti-ransomware solutions to keep track of what is going on, as mentioned this is due to the nature of memory mapped I/O.<br/>
