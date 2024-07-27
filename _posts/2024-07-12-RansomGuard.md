@@ -85,7 +85,7 @@ typedef struct _FLT_REGISTRATION {
   PFLT_SECTION_CONFLICT_NOTIFICATION_CALLBACK SectionNotificationCallback;
 } FLT_REGISTRATION, *PFLT_REGISTRATION;
 ```
-we will discuss some of it's member later on , for now let's look at the ```OperationRegistration``` field , of type ```FLT_OPERATION_REGISTRATION``` <br/>
+we will discuss some of it's members later on , for now let's look at the ```OperationRegistration``` field , of type ```FLT_OPERATION_REGISTRATION``` <br/>
 ``` cpp
 typedef struct _FLT_OPERATION_REGISTRATION {
   UCHAR                            MajorFunction;
