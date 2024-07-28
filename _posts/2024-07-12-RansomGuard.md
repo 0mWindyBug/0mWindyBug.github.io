@@ -1046,7 +1046,9 @@ RansomGuard deals with Maze comfortably , for a deatiled description of Maze che
 ```
 
 
-## Filtering file deletions (not implemented)
+## Filtering file deletions 
+Generally , there are two ways to delete a file. Opening it with the DELETE_ON_CLOSE flag set, or issuing an IRP_MJ_SET_INFORMATION with (fill dispositon value).
+Explain about DeletePending in FileObject and why cant we tell a file is deleted only until it was already deleted 
 
 
 ## Dealing with variation 3 (not implemented)
