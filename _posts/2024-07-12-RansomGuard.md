@@ -544,7 +544,7 @@ Again , simply check if the file is monitored and a write has been made, if not 
 ```
 
 ### PostCleanup 
-At this point the file cannot be modified using the same handle , due to IRQL restrictions capturing the second datapoint must be deferred to a worker thread, this is done by returning FLT_STATUS_MORE_PROCESSING_REQUIRED.<br/>
+At this point the file cannot be modified using the same handle , due to IRQL restrictions capturing the second datapoint must be deferred to a worker thread, this is done by returning ```FLT_POSTOP_MORE_PROCESSING_REQUIRED```.  <br/>
 
 ```cpp
 	pHandleContext HandleContx = (pHandleContext)CompletionContext;
