@@ -186,7 +186,7 @@ still much slower than accessing data buffered in system memory, so it becomes i
 brought into system memory before it is accessed (read-ahead functionality), to
 retain such information in memory until it is no longer needed (caching of data),
 and possibly to defer writing of modified data to disk to obtain greater efficiency
-(write-behind or delayed-write functionality (implemened by the lazy writer).<br/>
+(write-behind or delayed-write functionality).<br/>
 
 ## Cached write operation 
 Now , consider a write operation initiated by a user application , let's walkthrough the steps and see where the cache manager is involved.<br/>
@@ -260,7 +260,7 @@ Consider the most obvious sequence seen in ransomwares :
 There a few things to consider:<br/>
 1. A file may be truncated when opened , consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
 2. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
-Considering #1, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of FILE_SUPERSEDE , FILE_OVERWRITE or FILE_OVERWRITE_IF. in such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
+Considering #1, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of ```FILE_SUPERSEDE``` , ```FILE_OVERWRITE``` or ```FILE_OVERWRITE_IF```. In such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
 Considering #2 , the post modification state of the file is captured whenever whenever IRP_MJ_CLEANUP is sent.<br/>
 that is, whenever the last handle to a file object is closed (represents the usermode state), in contrast IRP_MJ_CLOSE is sent whenever the last reference is released from the file object (represents the system state). <br/>
 Whenever I need a reminder of what's allowed in PostCleanup , I go to the FAT source code and look for the check it does. The following can be seen in the ```FatCheckIsOperationLegal``` :
