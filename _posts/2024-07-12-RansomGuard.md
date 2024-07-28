@@ -798,7 +798,7 @@ Up until now , such I/O has been indirectly filtered out as it has no support fo
 	// if noncached paging I/O and not to the pagefile
 	if (FlagOn(Data->Iopb->IrpFlags, IRP_NOCACHE) && FlagOn(Data->Iopb->IrpFlags, IRP_PAGING_IO))
 ```																	  
-Next , we are going to check if the file has a file context attached to it , as we are only interested in noncached paging writes to files that have beem previously mapped by UM processes.<br/>
+Next , we are going to check if the file has a file context attached to it , as we are only interested in noncached paging writes to files that have been previously mapped by UM processes.<br/>
 ```cpp
 pFileContext FileContx;
 
