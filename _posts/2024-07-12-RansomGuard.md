@@ -1051,7 +1051,7 @@ A file or directory is deleted when a deletion request is pending and the last u
 * ```IRP_MJ_CREATE``` with the ```DELETE_ON_CLOSE``` flag set.
 * ```IRP_MJ_SET_INFORMATION``` with ```FileDispositionInformation/Ex``` passing ```FILE_DISPOSITION_INFORMATION``` structure with the ```DeleteFile``` boolean set to true.
 
-There's an interesting twist to this, the delete disposition can also be reset by calling the same ```IRP_MJ_SET_INFORMATION``` request with the ```FileDispositionInformation``` information class with the ```DeleteFile``` member set to ```FALSE```. This means that the file will not be deleted from the file system once the final handle is closed, cancelling the previous request to delete the file. This call (to set ```DeleteFile``` to ```FALSE```) will be successful regardless of whether the file had a delete disposition set or not. In fact, one can call to set and reset the disposition many times and whoever called last to set the disposition to either true or false will win.<br/>
+There's an interesting twist to this, the delete disposition can also be reset by calling the same ```IRP_MJ_SET_INFORMATION``` request with the ```FileDispositionInformation``` information class with the ```DeleteFile``` member set to FALSE. This means that the file will not be deleted from the file system once the final handle is closed, cancelling the previous request to delete the file. This call (to set ```DeleteFile``` to FALSE) will be successful regardless of whether the file had a delete disposition set or not. In fact, one can call to set and reset the disposition many times and whoever called last to set the disposition to either true or false will win.<br/>
 Since the delete disposition can also be manipulated from different handles , it must be a per stream flag , again looking at the FastFat source in ```FatSetDispositionInfo``` confirms  the flag is indeed part of the ```FCB```, which represents an on disk object : 
 
 ```cpp
@@ -1062,9 +1062,7 @@ FileObject->DeletePending = TRUE;
 But we already mentioned there's yet another way to reuqest a delete , ```IRP_MJ_CREATE``` with the ```DELETE_ON_CLOSE``` flag , looking at the FastFat source in ```FatCommonCreate``` : 
 
 ```cpp
-
             PCCB Ccb = (PCCB)FileObject->FsContext2;
-
 
             if (DeleteOnClose) {
 
@@ -1072,12 +1070,12 @@ But we already mentioned there's yet another way to reuqest a delete , ```IRP_MJ
             }
 ```
 
-We can see that the flag is translated into a```CCB``` flag, ```CCB_FLAG_DELETE_ON_CLOSE```. The ```CCB``` is unique per ```FILE_OBJECT``` so basically the ```FILE_OBJECT``` remembers that it was opened with the ```FILE_DELETE_ON_CLOSE``` flag. The question is, where is the ```CCB_FLAG_DELETE_ON_CLOSE``` flag converted into ```FCB_STATE_DELETE_ON_CLOSE``` ? <br/>
+We can see that the flag is translated into a```CCB``` flag, ```CCB_FLAG_DELETE_ON_CLOSE```. The ```CCB``` is unique per FILE_OBJECT so basically the FILE_OBJECT remembers that it was opened with the ```FILE_DELETE_ON_CLOSE``` flag. The question is, where is the ```CCB_FLAG_DELETE_ON_CLOSE``` flag converted into ```FCB_STATE_DELETE_ON_CLOSE``` ? <br/>
 A quick search shows this happens during ```IRP_MJ_CLEANUP``` , which has some noticable implications : 
 * Since the  ```FCB``` flag isn't set an ```IRP_MJ_QUERY_INFORMATION``` request with the ```FileStandardInformation``` information class will not return the ```DeletePending``` flag even though the file is going to be deleted.
-* Trying to set the ```DeleteFile``` flag to ```FALSE``` will have no effect since the ```FILE_DISPOSITION_INFORMATION``` structure only affects the ```FCB_STATE_DELETE_ON_CLOSE``` flag and not the ```CCB``` one.
+* Trying to set the ```DeleteFile``` flag to FALSE will have no effect since the ```FILE_DISPOSITION_INFORMATION``` structure only affects the ```FCB_STATE_DELETE_ON_CLOSE``` flag and not the ```CCB``` one.
 
-One interesting issue we are going to face when tracking file deletes is the fact the NT I/O stack is asynchrnous and as such the order in which a minifilter sees requests is not necessarily the order in which the file system sees them. Consider two ```IRP_MJ_SET_INFORMATION``` requests with ```FileDispoisition``` once in which the ```DeleteFile``` flag is set to true and another to false.  Moreover , they are racing in a way that the filter sees both pre operation callbacks before it sees the post operation callback for either of them (in other words both requests are being processed by layers below the filter at the same time). When a filter sees these requests it might see the one that sets it to ```TRUE``` and then the one that sets it to ```FALSE``` and assume that the delete disposition was set and then reset and so the file won't be deleted. However, it's very possible that the file system will received the request that sets the delete disposition to ```FALSE``` before the one it sets it to TRUE and so it will delete the file. This is clearly not a frequent case but it can happen (e.g. a minifilter below us in the stack pended the request).<br/> 
+One interesting issue we are going to face when tracking file deletes is the fact the NT I/O stack is asynchrnous and as such the order in which a minifilter sees requests is not necessarily the order in which the file system sees them. Consider two ```IRP_MJ_SET_INFORMATION``` requests with ```FileDispoisition``` once in which the ```DeleteFile``` flag is set to true and another to false.  Moreover , they are racing in a way that the filter sees both pre operation callbacks before it sees the post operation callback for either of them (in other words both requests are being processed by layers below the filter at the same time). When a filter sees these requests it might see the one that sets it to TRUE and then the one that sets it to FALSE and assume that the delete disposition was set and then reset and so the file won't be deleted. However, it's very possible that the file system will received the request that sets the delete disposition to FALSE before the one it sets it to TRUE and so it will delete the file. This is clearly not a frequent case but it can happen (e.g. a minifilter below us in the stack pended the request).<br/> 
 
 
 
