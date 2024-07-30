@@ -63,7 +63,7 @@ It's important to note that easy to write does not mean easy to design , which r
 
 
 ## Filtering file-system opertions 
-Whilst familarity with the filter manager is somewhat neccassery for the rest of the article , I'll  try to provide a brief summary of the basics, otherwise MSDN is your friend. <br/>
+Whilst familarity with the filter manager is somewhat neccassery for the rest of the article , I'll  try to provide a brief summary of the basics, in any case MSDN is your friend and feel free to skip this section if you ever worked with the filter manager. <br/>
 In order to tell the filter manager what filters to register , a minifilter calls ```FltRegisterFilter``` , passing the ```FLT_REGISTRATION``` structure : <br/>
 ``` cpp
 typedef struct _FLT_REGISTRATION {
