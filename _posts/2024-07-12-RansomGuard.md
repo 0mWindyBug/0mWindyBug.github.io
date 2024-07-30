@@ -654,8 +654,8 @@ Usage of memory mapped files to perform the encryption has become more and more 
 A file mapping is essentially a section object , with ```CreateFileMapping``` being a wrapper around ```NtCreateSection```.
 To write to a mapped file , an application maps a view of the file to the process and operates on the pages backing the view directly, as a result the corresponding PTEs are marked as dirty , when the virtual address range is flushed or unmapped the dirty PTE bit is "pushed out" to the PFN (i.e. the Modified bit gets set). Mofidied PFNs are written out back to storage asynchrnously by one of the page writers , for file backed sections by the mapped page writer , and for pagefile backed sections by the modified page writer.<br/>
 
-From the ransomware perspective this is great , the actual write to the file seems as if it was originated from the system process, it can even happen after the process is terminated , and since the ransomware process itself only interacts with memory rather than disk , it's also much faster.<br/>
-Our goal is to be able not only to detect those mapped page writer encryptions , but to pinpoint back at the malicious process behind it.<br/>
+From the ransomware perspective this is great , the actual write to the file seems as if it was originated from the system process, it can even happen after the process is terminated , and since the ransomware process itself only interacts with memory rather than disk , it's also much faster.
+Our goal is to be able not only to detect those mapped page writer encryptions , but to pinpoint back at the malicious process behind them.<br/>
 
 ### Synhcrnous Flush 
 Whilst I personally haven't seen such usage in ransomwares, an application can explictly call  ```FlushViewOfFile``` to flush changes back to storage synchrnously , in which case the nature of the paging write is different.<br/>
