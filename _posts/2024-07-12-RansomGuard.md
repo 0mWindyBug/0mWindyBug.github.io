@@ -1052,7 +1052,7 @@ A file or directory is deleted when a deletion request is pending and the last u
 * ```IRP_MJ_SET_INFORMATION``` with ```FileDispositionInformation/Ex``` passing ```FILE_DISPOSITION_INFORMATION``` structure with the ```DeleteFile``` boolean set to true.
 
 There's an interesting twist to this, the delete disposition can also be reset by calling the same ```IRP_MJ_SET_INFORMATION``` request with the ```FileDispositionInformation``` information class with the ```DeleteFile``` member set to ```FALSE```. This means that the file will not be deleted from the file system once the final handle is closed, cancelling the previous request to delete the file. This call (to set ```DeleteFile``` to ```FALSE```) will be successful regardless of whether the file had a delete disposition set or not. In fact, one can call to set and reset the disposition many times and whoever called last to set the disposition to either true or false will win.<br/>
-Since the delete disposition can also be manipulated from different handles , it must be a per stream flag , again looking at the FastFat source in ```FatSetDispositionInfo``` confirms  the flag is indeed part of the ```FCB``` : 
+Since the delete disposition can also be manipulated from different handles , it must be a per stream flag , again looking at the FastFat source in ```FatSetDispositionInfo``` confirms  the flag is indeed part of the ```FCB```, which represents an on disk object : 
 
 ```cpp
 SetFlag( Fcb->FcbState, FCB_STATE_DELETE_ON_CLOSE );
