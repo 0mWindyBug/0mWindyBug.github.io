@@ -7,12 +7,10 @@ excerpt: "Anti Ransomware minifilter driver"
 
 
 ## Intro
-Ransomware is one of the most simple - yet significant threats facing organizations today.<br/>
-Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it -  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat. 
-In this blogpost we are going to walkthrough the design of RansomGuard - an anti-ransomware filter driver we developed , as well as cover the required internals along the way.<br/>
+Ransomware is one of the most simple - yet significant threats facing organizations today. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it -  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we are going to walkthrough the design of RansomGuard - an anti-ransomware filter driver we developed , as well as cover the required internals along the way.<br/>
 
 ## Entropy 
-Entropy is a measure of randomness within a set of data. When referenced in the context of information theory and cybersecurity, most people are referring to Shannon Entropy.<br /> This is a specific algorithm that returns a value between 0 and 8 were values near 8 indicate that the data is very random, while values near 0 indicate that the data is very homodulous.<br /> 
+Entropy is a measure of randomness within a set of data. When referenced in the context of information theory and cybersecurity, most people are referring to Shannon Entropy. This is a specific algorithm that returns a value between 0 and 8 were values near 8 indicate that the data is very random, while values near 0 indicate that the data is very homodulous.<br /> 
 Shannon entropy can be a good indicator for detecting the use of packing, compression, and encryption of a file.<br />  Each of the previously mentioned techniques tends to increase the overall entropy of a file. This makes sense intuitively. Let’s take compression for example.<br />  Compression algorithms reduce the size of certain types of data by replacing duplicated parts with references to a single instance of that part. The end result is a file with less duplicated contents. The less duplication there is in a file, the higher the entropy will be because the data is less predictable than it was before. we are going to use entropy as a measure to detect encryption of data.<br/> 
 The following function gets a pointer to some data and it's size and returns it's shannon entropy value :<br/>
 ```cpp
@@ -1079,9 +1077,7 @@ One interesting issue we are going to face when tracking file deletes is the fac
 
 Rewind the reason we are interested in deletes is the following sequence:
 
-Diagram -
-
-
+ 
 
 
 
