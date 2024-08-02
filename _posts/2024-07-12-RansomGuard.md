@@ -1046,7 +1046,7 @@ RansomGuard deals with Maze comfortably , for a deatiled description of Maze che
 
 ## Filtering file deletions 
 A file or directory is deleted when a deletion request is pending and the last user reference to the file is released (that is, the last ```IRP_MJ_CLEANUP``` is sent to the file system). A deletion request can be initiated in one of two ways : 
-* ```IRP_MJ_CREATE``` with the ```DELETE_ON_CLOSE``` flag set.
+* ```IRP_MJ_CREATE``` with the ```FILE_DELETE_ON_CLOSE``` flag set.
 * ```IRP_MJ_SET_INFORMATION``` with ```FileDispositionInformation/Ex``` passing ```FILE_DISPOSITION_INFORMATION``` structure with the ```DeleteFile``` boolean set to true.
 
 There's an interesting twist to this, the delete disposition can also be reset by calling the same ```IRP_MJ_SET_INFORMATION``` request with the ```FileDispositionInformation``` information class with the ```DeleteFile``` member set to FALSE. This means that the file will not be deleted from the file system once the final handle is closed, cancelling the previous request to delete the file. This call (to set ```DeleteFile``` to FALSE) will be successful regardless of whether the file had a delete disposition set or not. In fact, one can call to set and reset the disposition many times and whoever called last to set the disposition to either true or false will win.<br/>
@@ -1057,7 +1057,7 @@ SetFlag( Fcb->FcbState, FCB_STATE_DELETE_ON_CLOSE );
 FileObject->DeletePending = TRUE;
 ```
 
-But we already mentioned there's yet another way to reuqest a delete , ```IRP_MJ_CREATE``` with the ```DELETE_ON_CLOSE``` flag , looking at the FastFat source in ```FatCommonCreate``` : 
+But we already mentioned there's yet another way to reuqest a delete , ```IRP_MJ_CREATE``` with the ```FILE_DELETE_ON_CLOSE``` flag , looking at the FastFat source in ```FatCommonCreate``` : 
 
 ```cpp
             PCCB Ccb = (PCCB)FileObject->FsContext2;
