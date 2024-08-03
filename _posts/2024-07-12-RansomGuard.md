@@ -1078,9 +1078,8 @@ One interesting issue we are going to face when tracking file deletes is the fac
 Rewind the reason we are interested in deletes is the following sequence:
 
  
-
-
-
+### PreCreate 
+Up until now we filtered out any request not asking for write access. Let's add a context boolean DeleteOnClose , and mark it if the file delete on close flag is set. 
 
 
 
