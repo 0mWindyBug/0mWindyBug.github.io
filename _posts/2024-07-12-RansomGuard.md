@@ -1082,8 +1082,9 @@ Rewind the reason we are interested in deletes is the following sequence:
 
  
 ### PreCreate 
-Up until now we filtered out any request not asking for write access. Let's add a context boolean DeleteOnClose , and mark it if the file delete on close flag is set. 
+Up until now we filtered out any request not asking for write access. Time to extend our driver to filter requests for delete on close, or requests for delete access.
 
+And our updated context strcuture 
 
 
 ## Dealing with variation 3 (not implemented)
