@@ -1079,7 +1079,7 @@ bool DeleteOnClose = FlagOn(params.Options, FILE_DELETE_ON_CLOSE);
 	if (!WriteAccess && !DeleteOnClose && !DeleteAccess)
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
-If ```FILE_DELETE_ON_CLOSE``` is set , take an initial datapoint : 
+If ```FILE_DELETE_ON_CLOSE``` is set , take an initial datapoint.
 ```cpp
 // if file is marked for deletion 
 	if (DeleteOnClose)
@@ -1104,7 +1104,7 @@ If ```FILE_DELETE_ON_CLOSE``` is set , take an initial datapoint :
 		return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 	}
 ```
-Our extended context structure : 
+Revisit our extended context structure :
 ```cpp
 typedef struct _HandleContext
 {
@@ -1126,7 +1126,7 @@ typedef struct _HandleContext
 	int  NumSetInfoOps;
 }HandleContext, * pHandleContext;
 ```
-And filter new files opened with write access : 
+We also have to start filtering new files, if they are opened with write access. 
 ```cpp
 	const auto& params = Data->Iopb->Parameters.Create;
 
