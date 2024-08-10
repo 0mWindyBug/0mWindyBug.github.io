@@ -1072,8 +1072,8 @@ if (FlagOn(Ccb->Flags, CCB_FLAG_DELETE_ON_CLOSE)) {
 
             ProcessingDeleteOnClose = TRUE;
 ```
-this has some noticable implications :
-* Since the  ```FCB``` flag isn't set an ```IRP_MJ_QUERY_INFORMATION``` request with the ```FileStandardInformation``` information class will not return the ```DeletePending``` flag even though the file is going to be deleted.
+the usage of the Ccb flag for delete on close has some noticable implications :
+* Since the  ```FCB``` flag isn't set up until cleanup, an ```IRP_MJ_QUERY_INFORMATION``` request with the ```FileStandardInformation``` information class will not return the ```DeletePending``` flag set even though the file is going to be deleted.
 * Trying to set the ```DeleteFile``` flag to FALSE will have no effect since the ```FILE_DISPOSITION_INFORMATION``` structure only affects the ```FCB_STATE_DELETE_ON_CLOSE``` flag and not the ```CCB``` one.
 * To clear DeleteOnClose state , one can issue an ```IRP_MJ_SET_INFORMATION``` request with the ```FILE_DISPOSITION_INFORMATION_EX``` structure enabling the ```FILE_DISPOSITION_ON_CLOSE```
 
@@ -1085,7 +1085,7 @@ Rewind the reason we are interested in deletes is the following sequences:
 <img src="{{ site.url }}{{ site.baseurl }}/images/SetDispositionDeleteSeq.png" alt="">
 
 
-### Filtering file deletes 
+### Filtering file deletions
 Up until now we filtered out any request not asking for write access. Time to extend our driver to filter requests that may end up delete the file. 
 ```cpp
 bool DeleteOnClose = FlagOn(params.Options, FILE_DELETE_ON_CLOSE);
