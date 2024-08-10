@@ -1054,7 +1054,25 @@ But we already mentioned there's yet another way to reuqest a delete , ```IRP_MJ
 ```
 
 We can see that the flag is translated into a```CCB``` flag, ```CCB_FLAG_DELETE_ON_CLOSE```. The ```CCB``` is unique per FILE_OBJECT so basically the FILE_OBJECT remembers that it was opened with the ```FILE_DELETE_ON_CLOSE``` flag. The question is, where is the ```CCB_FLAG_DELETE_ON_CLOSE``` flag converted into ```FCB_STATE_DELETE_ON_CLOSE``` ? <br/>
-A quick search shows this happens during ```IRP_MJ_CLEANUP``` , which has some noticable implications : 
+A quick search shows this happens during ```IRP_MJ_CLEANUP``` , as shown below:
+```cpp
+if (FlagOn(Ccb->Flags, CCB_FLAG_DELETE_ON_CLOSE)) {
+
+            NT_ASSERT( NodeType(Fcb) != FAT_NTC_ROOT_DCB );
+
+            //
+            //  Transfer the delete-on-close state to the FCB.  We do this rather
+            //  than leave the CCB_FLAG_DELETE_ON_CLOSE flag set so that if we
+            //  end up breaking an oplock and come in again we won't try to break
+            //  the oplock again (and again, and again...).
+            //
+
+            SetFlag( Fcb->FcbState, FCB_STATE_DELETE_ON_CLOSE );
+            ClearFlag( Ccb->Flags, CCB_FLAG_DELETE_ON_CLOSE );
+
+            ProcessingDeleteOnClose = TRUE;
+```
+this has some noticable implications :
 * Since the  ```FCB``` flag isn't set an ```IRP_MJ_QUERY_INFORMATION``` request with the ```FileStandardInformation``` information class will not return the ```DeletePending``` flag even though the file is going to be deleted.
 * Trying to set the ```DeleteFile``` flag to FALSE will have no effect since the ```FILE_DISPOSITION_INFORMATION``` structure only affects the ```FCB_STATE_DELETE_ON_CLOSE``` flag and not the ```CCB``` one.
 * To clear DeleteOnClose state , one can issue an ```IRP_MJ_SET_INFORMATION``` request with the ```FILE_DISPOSITION_INFORMATION_EX``` structure enabling the ```FILE_DISPOSITION_ON_CLOSE```
