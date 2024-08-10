@@ -1067,13 +1067,164 @@ Rewind the reason we are interested in deletes is the following sequences:
 <img src="{{ site.url }}{{ site.baseurl }}/images/SetDispositionDeleteSeq.png" alt="">
 
 
-### PreCreate 
-Up until now we filtered out any request not asking for write access. Time to extend our driver to filter requests for delete on close, or requests for delete access.
+### Filtering file deletes 
+Up until now we filtered out any request not asking for write access. Time to extend our driver to filter requests that may end up delete the file. That is any request with the ```FILE_DELETE_ON_CLOSE``` flag set or any request asking for delete access.
+```cpp
+bool DeleteOnClose = FlagOn(params.Options, FILE_DELETE_ON_CLOSE);
 
-And our updated context strcuture 
+	bool DeleteAccess = params.SecurityContext->DesiredAccess & DELETE;
+
+	bool WriteAccess = params.SecurityContext->DesiredAccess & FILE_WRITE_DATA;
+
+	if (!WriteAccess && !DeleteOnClose && !DeleteAccess)
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+```
+If ```FILE_DELETE_ON_CLOSE``` is set we will take our initial datapoint : 
+```cpp
+// if file is marked for deletion 
+	if (DeleteOnClose)
+	{
+		bool NotExists = utils::IsFileDeleted(FltObjects->Filter, FltObjects->Instance, &FileNameInfo->Name);
+		if (!NotExists)
+		{
+			CreateContx->PreEntropy = utils::CalculateFileEntropyByName(FltObjects->Filter, FltObjects->Instance, &FileNameInfo->Name, FLT_CREATE_CONTEXT, CreateContx);
+			if (CreateContx->PreEntropy == INVALID_ENTROPY)
+			{
+				FltFreePoolAlignedWithTag(FltObjects->Instance, CreateContx, TAG);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
+
+			CreateContx->CalculatedEntropy = true;
+		}
+
+		// no need to check for truncation if the file is marked for deletion we will not evaluate the write regardless 
+
+		*CompletionContext = CreateContx;
+
+		return FLT_PREOP_SUCCESS_WITH_CALLBACK;
+	}
+```
+Time to extend our context structure : 
+```cpp
+typedef struct _HandleContext
+{
+	PFLT_FILTER Filter;
+	PFLT_INSTANCE Instance;
+	UNICODE_STRING FileName;
+	UNICODE_STRING FinalComponent;
+	ULONG RequestorPid;
+	bool WriteOccured;
+	double PreEntropy;
+	double PostEntropy;
+	PVOID OriginalContent;
+	ULONG InitialFileSize;
+	bool SavedContent;
+	bool CcbDelete;
+	bool Truncated;
+	bool FcbDelete;
+	bool NewFile;
+	int  NumSetInfoOps;
+}HandleContext, * pHandleContext;
+```
+This time around , we will not filter out new files opened with write access : 
+```cpp
+	const auto& params = Data->Iopb->Parameters.Create;
+
+	bool NewFile = (Data->IoStatus.Information == FILE_CREATED);
+
+	// we are not interested in new files not opened for writing 
+	if (NewFile && (params.SecurityContext->DesiredAccess & FILE_WRITE_DATA) == 0)
+	{
+		if (PreCreateInfo->SavedContent)
+			ExFreePoolWithTag(PreCreateInfo->OriginalContent, TAG);
+
+		FltFreePoolAlignedWithTag(FltObjects->Instance, CompletionContext, TAG);
+		return FLT_POSTOP_FINISHED_PROCESSING;
+	}
+```
+
+And of course mark our context accordingly : 
+```cpp
+HandleContx->CcbDelete = PreCreateInfo->DeleteOnClose;
+HandleContx->NewFile = NewFile;
+```
+### IRP_MJ_SET_INFORMATION handlers 
+We are only interested in ```FileDispositionInformation``` & ```FileDispositionInformationEx``` requests. 
+To handle racing deletes , which as mentioned may occur due to the asycnhrnous nature of the I/O stack , we maintain a context counter field ```NumOfSetInfoOps``` to represent the number of changes to delete disposition in flight. If there's already some operations in flight, don't bother doing postop. Since there will be no postop (where the counter is decremented) , the value will forever stay 1 or more which will be one of the conditions for checking deletion at cleanup.<br/>
+```cpp
+FLT_PREOP_CALLBACK_STATUS
+filters::PreSetInformation(
+	_Inout_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+)
+{
+	switch (Data->Iopb->Parameters.SetFileInformation.FileInformationClass) {
+
+	case FileDispositionInformation:
+	case FileDispositionInformationEx:
+
+		pHandleContext HandleContx = nullptr;
+		NTSTATUS status = FltGetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, reinterpret_cast<PFLT_CONTEXT*>(&HandleContx));
+		if (!NT_SUCCESS(status))
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+		HandleContx->NumSetInfoOps++;
+
+		// handle racing deletes , in such case we will have to check if the file was actually deleted post cleanup 
+		if (HandleContx->NumSetInfoOps > 1)
+		{
+			FltReleaseContext(HandleContx);
+			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		}
+
+		// capture initial datapoint if we don't already have one 
+		if (!HandleContx->SavedContent)
+		{
+			HandleContx->PreEntropy = utils::CalculateFileEntropy(FltObjects->Instance, FltObjects->FileObject, HandleContx, true);
+		}
+
+		// pass context to post 
+
+		*CompletionContext = HandleContx;
+
+		return FLT_PREOP_SUCCESS_WITH_CALLBACK;
+	}
+	return FLT_PREOP_SUCCESS_NO_CALLBACK;
+}
+
+```
+
+And within our potstop ```IRP_MJ_SET_INFORMATION``` handler : 
+```cpp
+	if (NT_SUCCESS(Data->IoStatus.Status)) {
+		if (Data->Iopb->Parameters.SetFileInformation.FileInformationClass == FileDispositionInformationEx) {
+
+			ULONG flags = ((PFILE_DISPOSITION_INFORMATION_EX)Data->Iopb->Parameters.SetFileInformation.InfoBuffer)->Flags;
+
+			if (FlagOn(flags, FILE_DISPOSITION_ON_CLOSE)) {
+
+				HandleContx->CcbDelete = BooleanFlagOn(flags, FILE_DISPOSITION_DELETE);
+
+			}
+			else {
+				HandleContx->FcbDelete = BooleanFlagOn(flags, FILE_DISPOSITION_DELETE);
+			}
+		}
+		else {
+			HandleContx->FcbDelete = ((PFILE_DISPOSITION_INFORMATION)Data->Iopb->Parameters.SetFileInformation.InfoBuffer)->DeleteFile;
+		}
+	}
+
+	// operation is over , decrement active set info ops 
+	HandleContx->NumSetInfoOps--;
+
+	FltReleaseContext(HandleContx);
+
+	return FLT_POSTOP_FINISHED_PROCESSING;
+```
 
 
-## Dealing with variation 3 (not implemented)
 
 
-## Tests data agianst various ransomwares
+
