@@ -1079,7 +1079,7 @@ bool DeleteOnClose = FlagOn(params.Options, FILE_DELETE_ON_CLOSE);
 	if (!WriteAccess && !DeleteOnClose && !DeleteAccess)
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
-If ```FILE_DELETE_ON_CLOSE``` is set we will take our initial datapoint : 
+If ```FILE_DELETE_ON_CLOSE``` is set , take an initial datapoint : 
 ```cpp
 // if file is marked for deletion 
 	if (DeleteOnClose)
