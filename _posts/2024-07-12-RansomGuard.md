@@ -1041,6 +1041,18 @@ Since the delete disposition can also be manipulated from different handles , it
 SetFlag( Fcb->FcbState, FCB_STATE_DELETE_ON_CLOSE );
 FileObject->DeletePending = TRUE;
 ```
+```FCB_STATE_DELETE_ON_CLOSE``` is the flag determining if the file is going to be deleted or not , again based on the fastfat source. 
+```cpp
+   //
+                    //  Check if we should be deleting the file.  The
+                    //  delete operation really deletes the file but
+                    //  keeps the Fcb around for close to do away with.
+                    //
+    
+                    if (FlagOn(Fcb->FcbState, FCB_STATE_DELETE_ON_CLOSE) &&
+                        !FlagOn(Vcb->VcbState, VCB_STATE_FLAG_WRITE_PROTECTED)) {
+    
+```
 
 But we already mentioned there's yet another way to reuqest a delete , ```IRP_MJ_CREATE``` with the ```FILE_DELETE_ON_CLOSE``` flag , looking at the FastFat source in ```FatCommonCreate``` : 
 
@@ -1053,7 +1065,7 @@ But we already mentioned there's yet another way to reuqest a delete , ```IRP_MJ
             }
 ```
 
-We can see that the flag is translated into a```CCB``` flag, ```CCB_FLAG_DELETE_ON_CLOSE```. The ```CCB``` is unique per FILE_OBJECT so basically the FILE_OBJECT remembers that it was opened with the ```FILE_DELETE_ON_CLOSE``` flag. The question is, where is the ```CCB_FLAG_DELETE_ON_CLOSE``` flag converted into ```FCB_STATE_DELETE_ON_CLOSE``` ? <br/>
+We can see that the flag is translated into a ```CCB``` flag, ```CCB_FLAG_DELETE_ON_CLOSE```. The ```CCB``` (context control block) is unique per FILE_OBJECT structure,  so basically the FILE_OBJECT remembers that it was opened with the ```FILE_DELETE_ON_CLOSE``` flag. The question is, where is the ```CCB_FLAG_DELETE_ON_CLOSE``` flag converted into ```FCB_STATE_DELETE_ON_CLOSE``` ? <br/>
 A quick search shows this happens during ```IRP_MJ_CLEANUP``` , as shown below:
 ```cpp
 if (FlagOn(Ccb->Flags, CCB_FLAG_DELETE_ON_CLOSE)) {
@@ -1072,7 +1084,7 @@ if (FlagOn(Ccb->Flags, CCB_FLAG_DELETE_ON_CLOSE)) {
 
             ProcessingDeleteOnClose = TRUE;
 ```
-the usage of the Ccb flag for delete on close has some noticable implications :
+the usage of the ```Ccb``` flag for delete on close has some implications worth noting :
 * Since the  ```FCB``` flag isn't set up until cleanup, an ```IRP_MJ_QUERY_INFORMATION``` request with the ```FileStandardInformation``` information class will not return the ```DeletePending``` flag set even though the file is going to be deleted.
 * Trying to set the ```DeleteFile``` flag to FALSE will have no effect since the ```FILE_DISPOSITION_INFORMATION``` structure only affects the ```FCB_STATE_DELETE_ON_CLOSE``` flag and not the ```CCB``` one.
 * To clear DeleteOnClose state , one can issue an ```IRP_MJ_SET_INFORMATION``` request with the ```FILE_DISPOSITION_INFORMATION_EX``` structure enabling the ```FILE_DISPOSITION_ON_CLOSE```
