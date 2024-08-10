@@ -1068,7 +1068,7 @@ Rewind the reason we are interested in deletes is the following sequences:
 
 
 ### Filtering file deletes 
-Up until now we filtered out any request not asking for write access. Time to extend our driver to filter requests that may end up delete the file. That is any request with the ```FILE_DELETE_ON_CLOSE``` flag set or any request asking for delete access.
+Up until now we filtered out any request not asking for write access. Time to extend our driver to filter requests that may end up delete the file. 
 ```cpp
 bool DeleteOnClose = FlagOn(params.Options, FILE_DELETE_ON_CLOSE);
 
@@ -1104,7 +1104,7 @@ If ```FILE_DELETE_ON_CLOSE``` is set we will take our initial datapoint :
 		return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 	}
 ```
-Time to extend our context structure : 
+Our extended context structure : 
 ```cpp
 typedef struct _HandleContext
 {
@@ -1126,7 +1126,7 @@ typedef struct _HandleContext
 	int  NumSetInfoOps;
 }HandleContext, * pHandleContext;
 ```
-This time around , we will not filter out new files opened with write access : 
+And filter new files opened with write access : 
 ```cpp
 	const auto& params = Data->Iopb->Parameters.Create;
 
@@ -1143,14 +1143,15 @@ This time around , we will not filter out new files opened with write access :
 	}
 ```
 
-And of course mark our context accordingly : 
+Lastly, mark our context accordingly : 
 ```cpp
 HandleContx->CcbDelete = PreCreateInfo->DeleteOnClose;
 HandleContx->NewFile = NewFile;
 ```
+
 ### IRP_MJ_SET_INFORMATION handlers 
 We are only interested in ```FileDispositionInformation``` & ```FileDispositionInformationEx``` requests. 
-To handle racing deletes , which as mentioned may occur due to the asycnhrnous nature of the I/O stack , we maintain a context counter field ```NumOfSetInfoOps``` to represent the number of changes to delete disposition in flight. If there's already some operations in flight, don't bother doing postop. Since there will be no postop (where the counter is decremented) , the value will forever stay 1 or more which will be one of the conditions for checking deletion at cleanup.<br/>
+To handle racing deletes , we maintain a context counter field ```NumOfSetInfoOps``` to represent the number of changes to the delete disposition in flight. If there's already some operations in flight, no point calling postop. Since there will be no postop (where the counter is decremented) , the value will forever stay 1 or more being one of the conditions for checking deletion at cleanup.<br/>
 ```cpp
 FLT_PREOP_CALLBACK_STATUS
 filters::PreSetInformation(
@@ -1195,7 +1196,7 @@ filters::PreSetInformation(
 
 ```
 
-And within our potstop ```IRP_MJ_SET_INFORMATION``` handler : 
+We use our potstop ```IRP_MJ_SET_INFORMATION``` handler to update the state of ```FcbDelete``` & ```CcbDelete``` : 
 ```cpp
 	if (NT_SUCCESS(Data->IoStatus.Status)) {
 		if (Data->Iopb->Parameters.SetFileInformation.FileInformationClass == FileDispositionInformationEx) {
@@ -1224,7 +1225,75 @@ And within our potstop ```IRP_MJ_SET_INFORMATION``` handler :
 	return FLT_POSTOP_FINISHED_PROCESSING;
 ```
 
+On post-cleanup in our worker thread , if the deletion candidate was deleted we will add a new entry for the file in the ```DeletedFiles``` list of the process. 
+```cpp
+typedef struct _DeletedFile
+{
+	UNICODE_STRING Filename;
+	PVOID Content;
+	ULONG Size;
+	double PreEntropy;
+	LIST_ENTRY* Next;
+}DeletedFile, * pDeletedFile;
+```
 
+To check if a file is deleted we can either call ```FltQueryInformationFile``` and check for ```STATUS_FILE_DELETED``` or try and open the file and check for ```STATUS_OBJECT_NAME_NOT_FOUND```. The following is added to our evaluation work item :
+```cpp
+  // if delete on close was set , delete pending was set or there was a racing set disposition check if the file was deleted 
+    if (HandleContx->CcbDelete || HandleContx->FcbDelete || HandleContx->NumSetInfoOps > 0)
+    {
+
+        if (utils::IsFileDeleted(HandleContx->Filter, HandleContx->Instance, &HandleContx->FileName))
+        {
+            files::AddDeletedFile(&HandleContx->FileName, HandleContx->OriginalContent,HandleContx->InitialFileSize, HandleContx->RequestorPid,HandleContx->PreEntropy);
+
+            FltReleaseContext(HandleContx);
+            FltFreeDeferredIoWorkItem(FltWorkItem);
+            FltCompletePendedPostOperation(Data);
+            return;
+        }
+        
+    }
+```
+Finally , whenever a write is initiated to a new file we will check if it was previously deleted by the process. If so , we will copy the datapoint stored in the ```DeletedFiles``` list of the process entry structure to the file object context , our way to  "connect" between operations accross different handles  : 
+```cpp
+	// if that's the case , copy original content and size into the context's initial datapoint and mark it for evaluation (HandleContx->WriteOccured)
+	// then free resources owned by the process entry , so the resources's lifetime is more accurate (file object lifetime over process lifetime) 
+	// otherwise no need to mark HandleContx->WriteOccured as there's no point evaluating 
+	if (HandleContx->NewFile)
+	{
+		
+		DeletedData DeletedFileData = files::GetDeletedFileContent(&HandleContx->FileName, HandleContx->RequestorPid);
+		if (DeletedFileData.Content)
+		{
+			DbgPrint("[*] new file was created with the same name of a previously deleted file %wZ\n", HandleContx->FinalComponent);
+
+			// if it's the first write to this new file 
+			if (!HandleContx->WriteOccured)
+			{
+
+				// copy datapoint from process entry to context 
+				HandleContx->OriginalContent = ExAllocatePoolWithTag(NonPagedPool, DeletedFileData.Size, TAG);
+
+				if(!HandleContx->OriginalContent)
+					return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+				RtlCopyMemory(HandleContx->OriginalContent, DeletedFileData.Content, DeletedFileData.Size);
+				HandleContx->PreEntropy = DeletedFileData.PreEntropy;
+				HandleContx->WriteOccured = true;
+				HandleContx->SavedContent = true;
+
+				// remove deleted file from process entry 
+				if (files::RemoveDeletedFileByName(&HandleContx->FileName, HandleContx->RequestorPid))
+					DbgPrint("[*] copied resources from proc entry to file object context!\n");
+			}
+			
+		}
+
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
+	}
+```
+From there on , RansomGuard will evaluate the file object normally , capturing the second datapoint at post cleanup.
 
 
 
