@@ -247,7 +247,7 @@ bool evaluate::IsEncrypted(double InitialEntropy, double FinalEntropy)
 
 }
 ```
-We found 0.83 as the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
+We found 0.83 to be the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
 As we increase the value of the coefficient the difference between the initial entropy value and the final entropy value to be considered suspicious increases. <br/>
 
 ## Tracking & Evaluating file handles   
@@ -361,45 +361,24 @@ we are not interested in requests from kernel mode or not for writing  :
 ```
 handling TRUNCATE_EXISTING opens : 
 ```cpp
-	ULONG Options = params.Options;
-
-	// if file might going to be truncated in post create try to read it now
-	ULONG CreateDisposition = (Options >> 24) & 0x000000ff;
-
-	// we are going to invoke the post callback , so allocate a context to pass information to it 
-	pCreateCompletionContext CreateContx = (pCreateCompletionContext)FltAllocatePoolAlignedWithTag(FltObjects->Instance, NonPagedPool, sizeof(CreateCompletionContext), TAG);
-	if (!CreateContx)
-		return FLT_PREOP_SUCCESS_NO_CALLBACK;
-
-	CreateContx->PreEntropy = INVALID_ENTROPY;
-	CreateContx->OriginalContent = nullptr;
-	CreateContx->InitialFileSize = 0;
-	CreateContx->SavedContent = false;
-	CreateContx->CalculatedEntropy = false;
-
-	// if file might get truncated 
+	// if file might get truncated , check if it exists and if so capture our initial datapoint here 
 	if (CreateDisposition == FILE_OVERWRITE || CreateDisposition == FILE_OVERWRITE_IF || CreateDisposition == FILE_SUPERSEDE)
 	{
-		FilterFileNameInformation FileNameInfo(Data);
-		PFLT_FILE_NAME_INFORMATION NameInformation = FileNameInfo.Get();
-		if (!NameInformation)
+	
+		bool NotExists = utils::IsFileDeleted(FltObjects->Filter, FltObjects->Instance, &FileNameInfo->Name);
+		if (!NotExists)
 		{
-			FltFreePoolAlignedWithTag(FltObjects->Instance, CreateContx, TAG);
-			return FLT_PREOP_SUCCESS_NO_CALLBACK;
-		}
+			CreateContx->Truncated = true;
+			CreateContx->PreEntropy = utils::CalculateFileEntropyByName(FltObjects->Filter, FltObjects->Instance, &FileNameInfo->Name, FLT_CREATE_CONTEXT, CreateContx);
+			if (CreateContx->PreEntropy == INVALID_ENTROPY)
+			{
+				FltFreePoolAlignedWithTag(FltObjects->Instance, CreateContx, TAG);
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			}
 
-		CreateContx->PreEntropy = utils::CalculateFileEntropyByName(FltObjects->Filter, FltObjects->Instance, &NameInformation->Name, FLT_CREATE_CONTEXT, CreateContx);
-		if (CreateContx->PreEntropy == INVALID_ENTROPY)
-		{
-			FltFreePoolAlignedWithTag(FltObjects->Instance, CreateContx, TAG);
-			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			CreateContx->CalculatedEntropy = true;
 		}
-
-		CreateContx->CalculatedEntropy = true;
 	}
-	*CompletionContext = CreateContx;
-	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
-}
 ```
 
 A process notify routine managed linked list is used to track active processes in the system and maintain process state across different file-system operations, each process described by the following struct : <br/>
@@ -419,7 +398,11 @@ typedef struct _Process
 	pSection SectionsOwned;
 	int SectionsCount;
 	Mutex SectionsListLock;
+	pDeletedFile DeletedFiles;
+	int DeletedFilesCount;
+	Mutex DeletedFilesLock;
 } Process, * pProcess;
+
 ```
 Since we use a statistical logic to identify encryption , we set a threshold of encrypted files by a process in which we consider it as ransomware, the ```EncryptedFiles``` counter is used for that matter, the rest of the structure will make sense later on in the blogpost. <br/> 
 
@@ -447,7 +430,7 @@ Checking for FileObject context support and filtering out new files :
 ```cpp
 	pCreateCompletionContext PreCreateInfo = (pCreateCompletionContext)CompletionContext;
 
-	if (Flags & FLTFL_POST_OPERATION_DRAINING || !FltSupportsStreamHandleContexts(FltObjects->FileObject) || Data->IoStatus.Information == FILE_DOES_NOT_EXIST)
+	if (Flags & FLTFL_POST_OPERATION_DRAINING || !FltSupportsStreamHandleContexts(FltObjects->FileObject) || Data->IoStatus.Information == FILE_CREATED)
 	{
 		if (PreCreateInfo->SavedContent)
 			ExFreePoolWithTag(PreCreateInfo->OriginalContent,TAG);
