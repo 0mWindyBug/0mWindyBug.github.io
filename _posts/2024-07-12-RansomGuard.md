@@ -7,7 +7,7 @@ excerpt: "Anti Ransomware minifilter driver"
 
 
 ## Intro
-Ransomware is one of the most simple yet significant threats facing organizations today. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it -  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we are going to walkthrough the design of RansomGuard - an anti-ransomware filter driver we developed , as well as cover the required internals along the way.<br/>
+Ransomware is one of the most simple , yet significant threats facing organizations today. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it -  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we are going to walkthrough the design of RansomGuard - an anti-ransomware filter driver we developed , as well as cover the required internals along the way.<br/>
 
 ## Entropy 
 Entropy is a measure of randomness within a set of data. When referenced in the context of information theory and cybersecurity, most people are referring to Shannon Entropy. This is a specific algorithm that returns a value between 0 and 8 were values near 8 indicate that the data is very random, while values near 0 indicate that the data is very homodulous.<br /> 
