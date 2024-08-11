@@ -7,7 +7,7 @@ excerpt: "Anti Ransomware minifilter driver"
 
 
 ## Intro
-Ransomware is one of the most simple , yet significant threats facing organizations today. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it.  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we are going to walkthrough the design of RansomGuard - an anti-ransomware filter driver we developed , as well as cover the required internals along the way.<br/>
+Ransomware is one of the most simple , yet significant threats facing organizations today. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it.  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we are going to walkthrough the design and development of RansomGuard and cover the required internals along the way.<br/>
 
 ## Entropy 
 Entropy is a measure of randomness within a set of data. When referenced in the context of information theory and cybersecurity, most people are referring to Shannon Entropy. This is a specific algorithm that returns a value between 0 and 8 were values near 8 indicate that the data is very random, while values near 0 indicate that the data is very homodulous.<br /> 
@@ -54,14 +54,13 @@ double utils::CalculateEntropy(PVOID Buffer, size_t Size)
 ```
 
 ## The filter manager 
-The filter manager provides a level of abstraction allowing driver developers to invest more time into the actual logic of the filter rather than writing a body of "boiler plate" code.<br/> Speaking of boiler plate code , writing a legacy file-system filter driver that really **does nothing** can take up to nearly 6,000 lines of code. <br/>
-The filter manager is essentially a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.<br/>
+The filter manager provides a level of abstraction allowing driver developers to invest more time into the actual logic of the filter rather than writing a body of "boiler plate" code. Speaking of boiler plate code , writing a legacy file-system filter driver that really **does nothing** can take up to nearly 6,000 lines of code. The filter manager essentially serves as a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.<br/>
 After each minifilter processes the request, the filter manager then calls through to the next device object in the device stack , if any.<br/>
-It's important to note that easy to write does not mean easy to design , which remains a fairly complex task with minifilters, of course - depending on the minifilter's task in hand... Nevertheless it makes it possible to go from design to a working filter in weeks rather than months, which is great. <br />
+It's important to note that easy to write does not mean easy to design , which remains a fairly complex task with minifilters, of course - depending on the minifilter's task in hand. Nevertheless it makes it possible to go from design to a working filter in weeks rather than months, which is great. <br/>
 
 
-## Filtering file-system opertions 
-Whilst familarity with the filter manager is somewhat neccassery for the rest of the article , I'll  try to provide a brief summary of the basics, in any case MSDN is your friend and feel free to skip this section if you ever worked with the filter manager. <br/>
+## Interacting with the Filter Manager 
+Whilst familarity with the filter manager is somewhat neccassery for the rest of the article , I'll  try to provide a brief summary of the basics, in any case MSDN is your friend and feel free to skip this section if you ever worked with the filter manager.  <br/>
 In order to tell the filter manager what filters to register , a minifilter calls ```FltRegisterFilter``` , passing the ```FLT_REGISTRATION``` structure : <br/>
 ``` cpp
 typedef struct _FLT_REGISTRATION {
@@ -140,7 +139,7 @@ typedef struct _FLT_CALLBACK_DATA {
 
 ## Minifilter contexts 
 A context is a structure that is defined by the minifilter driver and that can be associated with a filter manager object.<br/>
-The filter manager provides support that allows minifilter drivers to associate contexts with objects to preserve state across I/O operations.<br/>
+The filter manager provides support for minifilter drivers to associate contexts with objects and preserve state across I/O operations.<br/>
 Contexts are extremley useful , and can be attached to the following objects : <br/>
     - Files <br/>
     - Instances <br/>
@@ -201,25 +200,24 @@ mapped view for the file region <br/>
 10. The cache manager returns control to the file system driver. The user data is now resident in system memory and has not yet been written to storage. So when is the data actually transfered to storage ? the Cc's lazy writer is responsible to decrease the window in which the cache is dirty by writing cached data back to storage , it coordinates with the mapped page writer thread of the Mm which is responsible to write dirty mapped pages back to storage whenever a certian threshold is met (there's also the modified page writer which shares similar responsbility , with pagefiles). <br/> The noncached write to storage may be initiated by either of them <br/>  
 11. The file system driver completes the original IRP sent to it by the I/O manager and the I/O manager completes the original user write request <br/> 
 
-Why do we care ? it's important to keep caching in mind before we are moving on to designing our file-system filter. <br/>
+It's important to keep caching in mind before making any design decisions in our filter.<br/>
 
 ## A few words regarding Paging I/O 
 Paging I/O is essentially a term used to describe I/O initiated by either the Mm or Cc. For paging reads , it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages , the read is of course non cached as it must be satisifed from storage.<br/>
 For paging writes , it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver , much like with a paging read , to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write<br/> 
-Again , keep these in mind : ) 
+Again , keep this in mind : ) 
 
 ## Ransomware variations 
-We have to consider all the variants of the encryption process, as it can happen very differently. <br/>
-The most popular variation is where the files are opened in R/W, read and encrypted in place, closed, and then (optionally) renamed.<br/> 
+When trying to mitigate ransomware , all the variants of the encryption process need to be considered as it can happen very differently. 
+The most popular variation is where the files are opened in R/W, read and encrypted in place, closed and then (optionally) renamed.<br/> 
 Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it is considered more evasive as the write is initiated by the system process rather than by the ransomware process (tbh anything asynchrnous is harder to deal with from a defensive point of view). This trick alone was enough for Maze, LockFile and others to evade some well known security solutions.<br/>
 Yet another way could be creating a copy of the file with the new name , opened for W, the original file is read, its encrypted content is written inside and the original file is deleted.<br/>
 Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly implemented by ransomwares in the wild.<br/> 
 
 ## Driver Verifier 
-Before starting to write our driver , let's talk about verifier briefly. Driver Verifier can subject Windows drivers to a variety of stresses and tests to find improper behavior. You can configure which tests to run, which allows you to put a driver through heavy stress loads and enforce edge cases.<br/>
-For a detailed description regarding the various checks avaliable , visit [OSR's post](https://www.osronline.com/article.cfm%5Earticle=325.htm) .<br/>
-Enabling verifier during the development process is extremley important for writing a quality driver and debugging efficiently.<br/>
-Note that when writing a minifilter you should enable it for both your driver and the fltmgr. <br/>
+A must mention before starting to work on the driver. Driver Verifier can subject Windows drivers to a variety of stresses and tests to find improper behavior. You can configure which tests to run, which allows you to put a driver through heavy stress loads and enforce edge cases.
+For a detailed description regarding the various avaliable checks visit [OSR's post](https://www.osronline.com/article.cfm%5Earticle=325.htm) .<br/>
+Enabling verifier during the development process is extremley important to ensure efficient debugging and driver quality , note that when writing a minifilter you should enable it for both your driver and the fltmgr. <br/>
 
 ## Detecting encryption 
 We already mentioned entropy as a measure to identify encryption of data, what we also mentioned is the fact compressed data tends to have high entropy.<br/>
@@ -245,11 +243,11 @@ bool evaluate::IsEncrypted(double InitialEntropy, double FinalEntropy)
 
 }
 ```
-We found 0.83 to be the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
+0.83 was found to be the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
 As we increase the value of the coefficient the difference between the initial entropy value and the final entropy value to be considered suspicious increases. <br/>
 
 ## Tracking & Evaluating file handles   
-As mentioned ransomware encryption can happen very differently when it comes to file-system operations, we are going to tackle each seperatley as each sequence requires it's own filtering logic.<br/>
+As mentioned ransomware encryption can happen very differently when it comes to file-system operations, we are going to tackle each variation seperatley as each sequence requires it's own filtering logic.<br/>
 Consider the most obvious sequence seen in ransomwares : 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence1.png" alt="">
 
@@ -305,8 +303,8 @@ Next , let's walkthrough each filter.<br/>
 For the full implementation of the filters : [filters.cpp source](https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuardBeta/RansomGuard/filters.cpp).
 
 ### PreCreate 
-Generally speaking , the PreCreate filter is responsible to filter out any uninteresting I/O requests. For now , we are only interested in file opens for R/W , from usermode (so yea , not filtering new files , altough that's going to change later on in the blogpost).<br/>
-In addition , as we've discussed earlier this is our only chance to capture the initial state of truncated files , if the file might get truncated - we read the file , calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.<br/>
+Generally speaking , the PreCreate filter is responsible to filter out any uninteresting I/O requests. For now , we are only interested in file opens for R/W , from usermode (so yea , not filtering new files , altough that's going to change later on in the blogpost).
+In addition , as we've discussed earlier this is our only chance to capture the initial state of truncated files , if the file might get truncated - we read the file , calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.
 Lastly , we also use this filter to enforce access restrictions : <br/>
 * The restore directory shpould be accessible only from kernel mode.
   - The user can connect to RansomGuard's filter port and issue a control to copy the files to a user-accesible location. <br/>
@@ -349,7 +347,7 @@ Let's walkthrough the code , starting with the encforcment of file-system access
 		return FLT_PREOP_COMPLETE;
 	}
 ```
-we are not interested in requests from kernel mode or not for writing  : 
+We are not interested in requests from kernel mode or not for writing  : 
 ```cpp
 	// Skip kernel mode or non write requests
 	const auto& params = Data->Iopb->Parameters.Create;
@@ -786,7 +784,7 @@ pFileContext FileContx;
 		if (!NT_SUCCESS(status))
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
-Since the mapped page writer flush takes percisley one write , we can reliably capture both of our datapoints already in pre write, we know about the state of the file before the write and we know what is going to be written.<br/>
+Since the mapped page writer flush precisley takes one write , we can reliably capture both of our datapoints  in pre write, as we know about the state of the file before the write and we know what is going to be written.<br/>
 RansomGuard simulates the write in memory as shown below: 
 ```cpp
 auto& WriteParams = Data->Iopb->Parameters.Write;
@@ -897,7 +895,7 @@ Now that we have two datapoints we can evaluate the contents in the buffers :
 		}
 
 ```
-If the operation is synchrnous, business as usual as we are in the caller's context. otherwise we call ```processes::UpdateEncryptedFilesAsync``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
+If the operation is synchrnous, we are in the caller's context and can evaluate normally. otherwise we call ```processes::UpdateEncryptedFilesAsync``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
 
 In theory , there's a chance for a process to modify thousands of file mappings and terminate before the mapped page writer activates. Rewind when a process is terminated , our process notify routine is invoked and the process entry structure is freed - we lose all tracking information we had on that process.<br/> To handle such case , if the process terminated has created more than a threshold number of R/W sections , it's removal from the list is deffered to a dedicated system thread : 
 ```cpp
