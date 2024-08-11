@@ -1315,6 +1315,35 @@ Finally , whenever a write is initiated to a new file we will check if it was pr
 	}
 ```
 From there on , RansomGuard will evaluate the file object normally , capturing the second datapoint at post cleanup.
+To test RansomGuard , I wrote a sample that initiates the following operations for every file on the C drive : 
+
+<img src="{{ site.url }}{{ site.baseurl }}/images/ProcmonReadDelete.png" alt="">
+
+Since we set a threshold for number of deleted files we are going to keep track of per process , a decision was made to lower the number of encryptions to be consdiered as ransomware (from 10 to 6). Again , RansomGuard has the upper hand : 
+* 6 files encrypted , 6 of which RansomGuard restored
+* Ransomware process successfully killed 
+* Debug output :
+```yaml
+00000132	11.30521011	[*] new file was created with the same name of a previously deleted file AG00057_.enc	
+00000134	11.31122875	[*] Encryption Detected	
+00000135	11.31124783	[*] files encrypted by ReadDeleteRansom.exe -> 1
+00000140	11.32738209	[*] new file was created with the same name of a previously deleted file Clase uno.enc		
+00000137	11.31461239	[*] Encryption Detected	
+00000138	11.31463814	[*] files encrypted by ReadDeleteRansom.exe -> 2	
+00000142	11.33468437	[*] new file was created with the same name of a previously deleted file earth.enc	
+00000144	11.34421158	[*] Encryption Detected	
+00000145	11.34424686	[*] files encrypted by ReadDeleteRansom.exe -> 3	
+00000146	11.35573006	[*] new file was created with the same name of a previously deleted file IMG_20170704_104906.enc	
+00000147	11.35573292	[*] Encryption Detected	
+00000148	11.35576439	[*] files encrypted by ReadDeleteRansom.exe -> 4	
+00000154	11.43546677	[*] new file was created with the same name of a previously deleted file IMG-20141130-WA0000.enc	
+00000156	11.44584751	[*] Encryption Detected	
+00000157	11.44586277	[*] files encrypted by ReadDeleteRansom.exe -> 5	
+00000159	11.44651985	[*] new file was created with the same name of a previously deleted file IMG-20170621-WA0005.enc	
+00000161	11.44701862	[*] Encryption Detected	
+00000162	11.44704056	[*] files encrypted by ReadDeleteRansom.exe -> 6	
+00000163	11.45691109	[*] killed ransomware process!
+```
 
 
 
