@@ -7,7 +7,7 @@ excerpt: "Anti Ransomware minifilter driver"
 
 
 ## Intro
-Ransomware is one of the most simple - yet significant threats facing organizations today. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it -  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we are going to walkthrough the design of RansomGuard - an anti-ransomware filter driver we developed , as well as cover the required internals along the way.<br/>
+Ransomware is one of the most simple yet significant threats facing organizations today. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it -  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we are going to walkthrough the design of RansomGuard - an anti-ransomware filter driver we developed , as well as cover the required internals along the way.<br/>
 
 ## Entropy 
 Entropy is a measure of randomness within a set of data. When referenced in the context of information theory and cybersecurity, most people are referring to Shannon Entropy. This is a specific algorithm that returns a value between 0 and 8 were values near 8 indicate that the data is very random, while values near 0 indicate that the data is very homodulous.<br /> 
@@ -150,14 +150,14 @@ Contexts are extremley useful , and can be attached to the following objects : <
     - Volumes <br/>
     
 Depending on the file system there are certian limitations for attaching contexts , e.g The NTFS and FAT file systems do not support file, stream, or file object contexts on paging files, in the pre-create or post-close path, or for IRP_MJ_NETWORK_QUERY_OPEN operations. <br/>
-A minifilter can call ```FltSupports*Contexts``` to check if a context type is supported on a given file object.<br/>
+A minifilter can call ```FltSupports*Contexts``` to check if a context type is supported for the given operation.<br/>
 
 #### Context managment 
 Context management is probably one of the most frustrating parts of maintaining a minifilter, your unload hangs ? it's often down to incorrect context managment. this is one (of many) reasons to why you should always enable driver verifier , more on this later : ) <br/>
 The filter manager uses reference counting to manage the lifetime of a minifilter context , whenever a context is successfully created,  it is initialized with reference count of one. <br/>
 Whenever a context is referenced, for example by a successful context set or get, the filter manager increments the reference count of the context by one. When a context is no longer needed, its reference count must be decremented. A positive reference count means that the context is usable,  when the reference count becomes zero, the context is unusable, and the filter manager eventually frees it. <br/> 
 Lastly , note the filter manager is the one responsible for derefencing the Set* reference , it does that in the following conditions: <br/>
-- The attached to system structure is about to go away. For example, when the file system calls FsRtlTeardownPer StreamContexts as part of tearing down the FCB, the Filter Manager will detach any attached stream contexts and dereference them.</br>
+- The attached to system structure is about to go away. For example, when the file system calls FsRtlTeardownPer StreamContexts as part of tearing down the FCB, the Filter Manager will detach any attached stream contexts and dereference them.<br/>
 - The filter instance associated with the context is being detached.  Again taking the stream context example, during instance teardown after the InstanceTeardown callbacks have been made the filter manager will detach any stream contexts associated with this instance from their associated ADVANCED_FCB_HEADER and dereference them. <br/>
 
 #### Context registration 
@@ -177,9 +177,7 @@ typedef struct _FLT_CONTEXT_REGISTRATION {
 The ```ContextCleanupCallback``` is called right before the context goes away ,  useful for releasing internal context resources <br/> 
 
 ## The NT cache manager 
-The windows cache manager is a software-only component which is closely integrated with the windows memory manager , to make file-system data accessible within the virtual memory system <br/>
-Although constant advances in storage technologies have led to faster and
-cheaper secondary storage devices, accessing data off secondary storage media is
+The windows cache manager is a software-only component which is closely integrated with the windows memory manager , to make file-system data accessible within the virtual memory system. Although constant advances in storage technologies have led to faster and cheaper secondary storage devices, accessing data off secondary storage media is
 still much slower than accessing data buffered in system memory, so it becomes important to have data
 brought into system memory before it is accessed (read-ahead functionality), to
 retain such information in memory until it is no longer needed (caching of data),
@@ -213,7 +211,7 @@ Again , keep these in mind : )
 ## Ransomware variations 
 We have to consider all the variants of the encryption process, as it can happen very differently. <br/>
 The most popular variation is where the files are opened in R/W, read and encrypted in place, closed, and then (optionally) renamed.<br/> 
-Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it is considered more evasive as the write is initiated by the system process rather than the malicious one (tbh anything asynchrnous is harder to deal with from a defensive point of view), this trick alone was enough for Maze, LockFile and others to evade security solutions.<br/>
+Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it is considered more evasive as the write is initiated by the system process rather than by the ransomware process (tbh anything asynchrnous is harder to deal with from a defensive point of view). This trick alone was enough for Maze, LockFile and others to evade some well known security solutions.<br/>
 Yet another way could be creating a copy of the file with the new name , opened for W, the original file is read, its encrypted content is written inside and the original file is deleted.<br/>
 Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly implemented by ransomwares in the wild.<br/> 
 
@@ -1180,16 +1178,11 @@ HandleContx->NewFile = NewFile;
 ```
 
 ### Managing  CCB_FLAG_DELETE_ON_CLOSE and FCB_STATE_DELETE_ON_CLOSE 
-We are only interested in ```IRP_MJ_SET_INFORMATION``` requests with info either ```FileDispositionInformation``` or ```FileDispositionInformationEx``` information class . 
+We are only interested in ```IRP_MJ_SET_INFORMATION``` requests with either the ```FileDispositionInformation``` or ```FileDispositionInformationEx``` information class . 
 To handle racing deletes , we maintain a context counter field ```NumOfSetInfoOps``` to represent the number of changes to the delete disposition in flight. If there's already some operations in flight, no point calling postop. Since there will be no postop (where the counter is decremented) , the value will forever stay 1 or more being one of the conditions for checking deletion at cleanup.<br/>
+below is our pre set information filter.
 ```cpp
-FLT_PREOP_CALLBACK_STATUS
-filters::PreSetInformation(
-	_Inout_ PFLT_CALLBACK_DATA Data,
-	_In_ PCFLT_RELATED_OBJECTS FltObjects,
-	_Flt_CompletionContext_Outptr_ PVOID* CompletionContext
-)
-{
+
 	switch (Data->Iopb->Parameters.SetFileInformation.FileInformationClass) {
 
 	case FileDispositionInformation:
@@ -1255,7 +1248,7 @@ We use our potstop ```IRP_MJ_SET_INFORMATION``` handler to update the state of `
 	return FLT_POSTOP_FINISHED_PROCESSING;
 ```
 
-On post-cleanup in our worker thread , if the deletion candidate was deleted we will add a new entry for the file in the ```DeletedFiles``` list of the process. 
+In the worker queued in post cleanup , if the deletion candidate was deleted we will add a new entry for the file in the ```DeletedFiles``` list of the process. We limit the number of entries in the list to a threshold (configured to 20) enough to detect the ransomware, but one that also limits memory usage. 
 ```cpp
 typedef struct _DeletedFile
 {
