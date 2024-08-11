@@ -1084,7 +1084,7 @@ if (FlagOn(Ccb->Flags, CCB_FLAG_DELETE_ON_CLOSE)) {
 
             ProcessingDeleteOnClose = TRUE;
 ```
-the usage of the ```Ccb``` flag for delete on close has some implications worth noting :
+the usage of the ```CCB``` flag for delete on close has some implications worth noting :
 * Since the  ```FCB``` flag isn't set up until cleanup, an ```IRP_MJ_QUERY_INFORMATION``` request with the ```FileStandardInformation``` information class will not return the ```DeletePending``` flag set even though the file is going to be deleted.
 * Trying to set the ```DeleteFile``` flag to FALSE will have no effect since the ```FILE_DISPOSITION_INFORMATION``` structure only affects the ```FCB_STATE_DELETE_ON_CLOSE``` flag and not the ```CCB``` one.
 * To clear DeleteOnClose state , one can issue an ```IRP_MJ_SET_INFORMATION``` request with the ```FILE_DISPOSITION_INFORMATION_EX``` structure enabling the ```FILE_DISPOSITION_ON_CLOSE```
@@ -1097,7 +1097,7 @@ Rewind the reason we are interested in deletes is the following sequences:
 <img src="{{ site.url }}{{ site.baseurl }}/images/SetDispositionDeleteSeq.png" alt="">
 
 
-### Filtering file deletions
+### Extending the driver
 Up until now we filtered out any request not asking for write access. Time to extend our driver to filter requests that may end up delete the file. 
 ```cpp
 bool DeleteOnClose = FlagOn(params.Options, FILE_DELETE_ON_CLOSE);
@@ -1179,8 +1179,8 @@ HandleContx->CcbDelete = PreCreateInfo->DeleteOnClose;
 HandleContx->NewFile = NewFile;
 ```
 
-### IRP_MJ_SET_INFORMATION handlers 
-We are only interested in ```FileDispositionInformation``` & ```FileDispositionInformationEx``` requests. 
+### Managing  CCB_FLAG_DELETE_ON_CLOSE and FCB_STATE_DELETE_ON_CLOSE 
+We are only interested in ```IRP_MJ_SET_INFORMATION``` requests with info either ```FileDispositionInformation``` or ```FileDispositionInformationEx``` information class . 
 To handle racing deletes , we maintain a context counter field ```NumOfSetInfoOps``` to represent the number of changes to the delete disposition in flight. If there's already some operations in flight, no point calling postop. Since there will be no postop (where the counter is decremented) , the value will forever stay 1 or more being one of the conditions for checking deletion at cleanup.<br/>
 ```cpp
 FLT_PREOP_CALLBACK_STATUS
