@@ -210,7 +210,7 @@ Again , keep this in mind : )
 ## Ransomware variations 
 When trying to mitigate ransomware , all the variants of the encryption process need to be considered as it can happen very differently. 
 The most popular variation is where the files are opened in R/W, read and encrypted in place, closed and then (optionally) renamed.<br/> 
-Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it is considered more evasive as the write is initiated by the system process rather than by the ransomware process (tbh anything asynchrnous is harder to deal with from a defensive point of view). This trick alone was enough for Maze, LockFile and others to evade some well known security solutions.<br/>
+Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it is considered more evasive as the write is initiated asynchronously by the system process rather than by the ransomware process (tbh anything asynchrnous is harder to deal with from a defensive point of view). This trick alone was enough for Maze, LockFile and others to evade some well known security solutions.<br/>
 Yet another way could be creating a copy of the file with the new name , opened for W, the original file is read, its encrypted content is written inside and the original file is deleted.<br/>
 Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly implemented by ransomwares in the wild.<br/> 
 
@@ -629,13 +629,13 @@ Usage of memory mapped files to perform the encryption has become more and more 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence2.png" alt="">
 
 A file mapping is essentially a section object , with ```CreateFileMapping``` being a wrapper around ```NtCreateSection```.
-To write to a mapped file , an application maps a view of the file to the process and operates on the pages backing the view directly, as a result the corresponding PTEs are marked as dirty , when the virtual address range is flushed or unmapped the dirty PTE bit is "pushed out" to the PFN (i.e. the Modified bit gets set). Mofidied PFNs are written out back to storage asynchrnously by one of the page writers , for file backed sections by the mapped page writer , and for pagefile backed sections by the modified page writer.<br/>
+To write to a mapped file , an application maps a view of the file to the process and operates on the pages backing the view directly, as a result the corresponding PTEs are marked as dirty , when the virtual address range is flushed or unmapped the dirty PTE bit is "pushed out" to the PFN (i.e. the Modified bit gets set). Mofidied PFNs are written out back to storage asynchronously by one of the page writers , for file backed sections by the mapped page writer , and for pagefile backed sections by the modified page writer.<br/>
 
 From the ransomware perspective this is great , the actual write to the file seems as if it was originated from the system process, it can even happen after the process is terminated , and since the ransomware process itself only interacts with memory rather than disk , it's also much faster.
 Our goal is to be able not only to detect those mapped page writer encryptions , but to pinpoint back at the malicious process behind them.<br/>
 
-### Synhcrnous Flush 
-Whilst I personally haven't seen such usage in ransomwares, an application can explictly call  ```FlushViewOfFile``` to flush changes back to storage synchrnously , in which case the nature of the paging write is different.<br/>
+### Synchronous flush 
+Whilst I personally haven't seen such usage in ransomwares, an application can explictly call  ```FlushViewOfFile``` to flush changes back to storage synchronously , in which case the nature of the paging write is different.<br/>
 ```FlushViewOfFile``` maps to ```MmFlushVirtualMemory``` in ntos , which in turn calls ```MmFlushSectionInternal``` as shown below : <br/>
 <img src="{{ site.url }}{{ site.baseurl }}/images/AcquireCc.png" alt="">
 
@@ -660,8 +660,8 @@ Note ```IRP_MJ_RELEASE_FOR_MOD_WRITE``` is typically invoked as part of a specia
 
 Altough not used in RansomGuard, using the Acquire/Release callbacks as two datapoints to filter memory mapped I/O writes is a possability.<br/>
 
-### Building asynchrnous context 
-To connect between a mapped page writer write and the process that memory mapped the file , we have to monitor the creation of section objects.<br/> The heuristic idea is to assume any process that created a R/W section object for the file might be the one that modified the mapping and triggered the asynchrnous write, that means , whenever our minifilter sees a mapped page writer encryption , we will traverse each process and check if it ever created a R/W section for file in question , if so , it's ```EncryptedFiles``` counter will be increased.<br/> The odds for two different processes (one being a ransomware and the other being legitimiate) , to create R/W section objects for the same X number of files , and for those X number of files to also get encrypted are very slim to say the least , and so is the risk for false positives.<br/>
+### Building asynchronous context 
+To connect between a mapped page writer write and the process that memory mapped the file , we have to monitor the creation of section objects.<br/> The heuristic idea is to assume any process that created a R/W section object for the file might be the one that modified the mapping and triggered the aysnchronous write, that means , whenever our minifilter sees a mapped page writer encryption , we will traverse each process and check if it ever created a R/W section for file in question , if so , it's ```EncryptedFiles``` counter will be increased.<br/> The odds for two different processes (one being a ransomware and the other being legitimiate) , to create R/W section objects for the same X number of files , and for those X number of files to also get encrypted are very slim to say the least , and so is the risk for false positives.<br/>
 
 To track the creation of section objects we can filter ```IRP_MJ_ACQUIRE_FOR_SECTION_SYNCHRONIZATION```, we are only interested in the creation of R/W section objects from UserMode : 
 ```cpp
@@ -764,7 +764,7 @@ If that's indeed the case:
 ```
 
 ### Noncached paging I/O PreWrite filtering
-We know memory mapped I/O , regardless if synchrnous (explicit flush) or asynchrnous (mapped / modified page writer write) comes in the form of noncached paging I/O.<br/> 
+We know memory mapped I/O , regardless if synchronous (explicit flush) or asynchronous (mapped / modified page writer write) comes in the form of noncached paging I/O.<br/> 
 Up until now , such I/O has been indirectly filtered out as it has no support for FileObject contexts, we can add the following check at the start of our PreWrite filter.<br/>
 ```cpp
 // not interested in writes to the paging file 
@@ -877,13 +877,13 @@ Now that we have two datapoints we can evaluate the contents in the buffers :
 		{
 			ULONG RequestorPid = FltGetRequestorProcessId(Data);
 
-			// synchrnous -> explicit flush 
+			// synchronohs -> explicit flush 
 			if (FlagOn(Data->Iopb->IrpFlags, IRP_SYNCHRONOUS_PAGING_IO) && RequestorPid != SYSTEM_PROCESS)
 			{
 				DbgPrint("[*] %wZ encrypted by %d\n", FileContx->FileName, RequestorPid);
 				processes::UpdateEncryptedFiles(RequestorPid);
 			}
-			// asynchrnous -> mapped page writer write 
+			// asynchronous -> mapped page writer write 
 			else
 			{
 				DbgPrint("[*] %wZ encrypted by mapped page writer\n",FileContx->FileName);
@@ -895,7 +895,7 @@ Now that we have two datapoints we can evaluate the contents in the buffers :
 		}
 
 ```
-If the operation is synchrnous, we are in the caller's context and can evaluate normally. otherwise we call ```processes::UpdateEncryptedFilesAsync``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
+If the operation is synchronous, we are in the caller's context and can evaluate normally. otherwise we call ```processes::UpdateEncryptedFilesAsync``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
 
 In theory , there's a chance for a process to modify thousands of file mappings and terminate before the mapped page writer activates. Rewind when a process is terminated , our process notify routine is invoked and the process entry structure is freed - we lose all tracking information we had on that process.<br/> To handle such case , if the process terminated has created more than a threshold number of R/W sections , it's removal from the list is deffered to a dedicated system thread : 
 ```cpp
