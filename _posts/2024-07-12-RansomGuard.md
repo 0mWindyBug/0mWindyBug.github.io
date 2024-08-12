@@ -151,7 +151,7 @@ Contexts are extremley useful , and can be attached to the following objects : <
 Depending on the file system there are certian limitations for attaching contexts , e.g The NTFS and FAT file systems do not support file, stream, or file object contexts on paging files, in the pre-create or post-close path, or for IRP_MJ_NETWORK_QUERY_OPEN operations. <br/>
 A minifilter can call ```FltSupports*Contexts``` to check if a context type is supported for the given operation.<br/>
 
-#### Context managment 
+### Context managment 
 Context management is probably one of the most frustrating parts of maintaining a minifilter, your unload hangs ? it's often down to incorrect context managment. this is one (of many) reasons to why you should always enable driver verifier , more on this later : ) <br/>
 The filter manager uses reference counting to manage the lifetime of a minifilter context , whenever a context is successfully created,  it is initialized with reference count of one. <br/>
 Whenever a context is referenced, for example by a successful context set or get, the filter manager increments the reference count of the context by one. When a context is no longer needed, its reference count must be decremented. A positive reference count means that the context is usable,  when the reference count becomes zero, the context is unusable, and the filter manager eventually frees it. <br/> 
@@ -763,7 +763,7 @@ If that's indeed the case:
 	return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
 
-### Noncached paging I/O PreWrite filtering
+### Noncached paging I/O write filtering
 We know memory mapped I/O , regardless if synchronous (explicit flush) or asynchronous (mapped / modified page writer write) comes in the form of noncached paging I/O.<br/> 
 Up until now , such I/O has been indirectly filtered out as it has no support for FileObject contexts, we can add the following check at the start of our PreWrite filter.<br/>
 ```cpp
@@ -969,7 +969,7 @@ Instead we are going to take the apprach below , the comment describes it well e
 		}
 ```
 
-#### RansomGuard against Maze 
+### RansomGuard against Maze 
 RansomGuard deals with Maze comfortably , for a deatiled description of Maze check Sophos's blogpost out :  [Sophos's post](https://news.sophos.com/en-us/2020/05/12/maze-ransomware-1-year-counting/ ). <br/>
 * 11 files encrypted , 10 of which RansomGuard restored
 * Maze successfully killed 
@@ -1294,7 +1294,8 @@ Finally , whenever a write is initiated to a new file we will check if it was pr
 			{
 
 				// copy datapoint from process entry to context 
-				HandleContx->OriginalContent = ExAllocatePoolWithTag(NonPagedPool, DeletedFileData.Size, TAG);
+HandleContx->InitialFileSize = DeletedFileData.Size;
+HandleContx->OriginalContent = ExAllocatePoolWithTag(NonPagedPool, DeletedFileData.Size, TAG);
 
 				if(!HandleContx->OriginalContent)
 					return FLT_PREOP_SUCCESS_NO_CALLBACK;
