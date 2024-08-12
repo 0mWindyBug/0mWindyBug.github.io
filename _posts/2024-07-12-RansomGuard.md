@@ -1087,7 +1087,7 @@ the usage of the ```CCB``` flag for delete on close has some implications worth 
 
 One interesting issue we are going to face when tracking file deletes is the fact the NT I/O stack is asynchrnous and as such the order in which a minifilter sees requests is not necessarily the order in which the file system sees them. Consider two ```IRP_MJ_SET_INFORMATION``` requests with ```FileDispoisition``` once in which the ```DeleteFile``` flag is set to true and another to false.  Moreover , they are racing in a way that the filter sees both pre operation callbacks before it sees the post operation callback for either of them (in other words both requests are being processed by layers below the filter at the same time). When a filter sees these requests it might see the one that sets it to TRUE and then the one that sets it to FALSE and assume that the delete disposition was set and then reset and so the file won't be deleted. However, it's very possible that the file system will received the request that sets the delete disposition to FALSE before the one it sets it to TRUE and so it will delete the file. This is clearly not a frequent case but it can happen (e.g. a minifilter below us in the stack pended the request).<br/> 
 
-Rewind the reason we are interested in deletes is the following sequences:
+Rewind the reason we are interested in deletes are the following sequences of operations:
 <img src="{{ site.url }}{{ site.baseurl }}/images/DeleteOnCloseSeq.png" alt="">
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/SetDispositionDeleteSeq.png" alt="">
