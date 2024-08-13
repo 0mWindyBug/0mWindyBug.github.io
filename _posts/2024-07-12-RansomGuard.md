@@ -922,16 +922,16 @@ pProcess ProcessEntry = processes::GetProcessEntry(HandleToUlong(ProcessId));
 The system thread waits for two minutes and removes the entry , we also have to "fake" the pid to avoid ambiguity conflicts (i.e. a new process is created with the same pid that have just been terminated.)<br/>
 
 ### Blocking a mapped page writer write 
-As mentioned a process may be able to modify a large number of views before the mapped page writer activates. We can't prevent those modifications by killing the process , the paging writes have already been "scheduled" as the PTEs are marked as dirty. <br/> Once we know a ransomware is executing, and is using memory mapped I/O to encrypt files, we'd like to prevent any modification to a file that is backed by a R/W section created by the process classified as ransomware.<br/> We cant block the write (i.e. by returning access denied and FLT_PREOP_COMPLETE) as in such case  the PFN will remain modified - inevtibaly causing the mapped page writer to trigger again.
-One option could be to lie and "successfully" complete the IRP :
+As mentioned a process may be able to modify a large number of views before the mapped page writer activates. We can't prevent those modifications by killing the process , the paging writes have already been "scheduled" as the PTEs were already marked as dirty. Once we know a ransomware is executing, and is using memory mapped I/O to encrypt files, we'd like to prevent any modification to a file that is backed by a R/W section created by the said ransomware. We cant block the write (i.e. by returning access denied and ```FLT_PREOP_COMPLETE```) as in such case the PFN remains modified , inevtibaly causing the mapped page writer to trigger again.
+One option could be to lie and "successfully" complete the IRP.
 
 ```cpp
 Data->Iosb.Status = STATUS_SUCCESS;
 Data->Iosb.Information = Data->Iopb->Parameters.Write.Length;
 return FLT_PREOP_COMPLETE
 ```
-Whilst it will indeed prevent the modification, it can lead to major cache coherncey issues eventually causing applications to fail and potentially the machine to crash.<br/>
-Instead we are going to take the apprach below , the comment describes it well enough : 
+Whilst it will indeed prevent  modification, it can lead to major cache coherncey issues eventually causing applications to fail and potentially the machine to crash.
+Instead we are going to take the following approach : 
 ```cpp
 		// if a malicious process has a R/W section object to this file we want to prevent the modification
 		// we cant simply deny the write as the page will remain dirty which will cause the MPW to trigger again later 
@@ -970,7 +970,7 @@ Instead we are going to take the apprach below , the comment describes it well e
 ```
 
 ### RansomGuard against Maze 
-RansomGuard deals with Maze comfortably , for a deatiled description of Maze check Sophos's blogpost out :  [Sophos's post](https://news.sophos.com/en-us/2020/05/12/maze-ransomware-1-year-counting/ ). <br/>
+RansomGuard deals with Maze comfortably , for a deatiled description of Maze check out Sophos's blogpost  :  [Sophos's post](https://news.sophos.com/en-us/2020/05/12/maze-ransomware-1-year-counting/ ). <br/>
 * 11 files encrypted , 10 of which RansomGuard restored
 * Maze successfully killed 
 * Debug output :
