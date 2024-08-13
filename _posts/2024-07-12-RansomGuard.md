@@ -205,8 +205,7 @@ It's important to keep caching in mind before making any design decisions in our
 ## A few words regarding Paging I/O 
 Paging I/O is essentially a term used to describe I/O initiated by either the Mm or Cc. For paging reads , it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages , the read is of course non cached as it must be satisifed from storage.<br/>
 For paging writes , it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver , much like with a paging read , to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write<br/> 
-Again , keep this in mind : ) 
-
+We are going to deal with the challenges posed by filtering paging I/O later on in the article , in relation to memory mapped files.
 ## Ransomware variations 
 When trying to mitigate ransomware , all the variants of the encryption process need to be considered as it can happen very differently. 
 The most popular variation is where the files are opened in R/W, read and encrypted in place, closed and then (optionally) renamed.<br/> 
