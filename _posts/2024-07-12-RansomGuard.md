@@ -59,7 +59,7 @@ After each minifilter processes the request, the filter manager then calls throu
 It's important to note that easy to write does not mean easy to design , which remains a fairly complex task with minifilters, of course - depending on the minifilter's task in hand. Nevertheless it makes it possible to go from design to a working filter in weeks rather than months, which is great. <br/>
 
 
-## Interacting with the Filter Manager 
+## Interacting with the filter manager
 Whilst familarity with the filter manager is somewhat neccassery for the rest of the article , I'll  try to provide a brief summary of the basics, in any case MSDN is your friend and feel free to skip this section if you ever worked with the filter manager.  <br/>
 In order to tell the filter manager what filters to register , a minifilter calls ```FltRegisterFilter``` , passing the ```FLT_REGISTRATION``` structure : <br/>
 ``` cpp
@@ -206,6 +206,7 @@ It's important to keep caching in mind before making any design decisions in our
 Paging I/O is essentially a term used to describe I/O initiated by either the Mm or Cc. For paging reads , it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages , the read is of course non cached as it must be satisifed from storage.<br/>
 For paging writes , it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver , much like with a paging read , to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write<br/> 
 We are going to deal with the challenges posed by filtering paging I/O later on in the article , in relation to memory mapped files.
+
 ## Ransomware variations 
 When trying to mitigate ransomware , all the variants of the encryption process need to be considered as it can happen very differently. 
 The most popular variation is where the files are opened in R/W, read and encrypted in place, closed and then (optionally) renamed.<br/> 
@@ -214,9 +215,9 @@ Yet another way could be creating a copy of the file with the new name , opened 
 Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly implemented by ransomwares in the wild.<br/> 
 
 ## Driver Verifier 
-A must mention before starting to work on the driver. Driver Verifier can subject Windows drivers to a variety of stresses and tests to find improper behavior. You can configure which tests to run, which allows you to put a driver through heavy stress loads and enforce edge cases.
-For a detailed description regarding the various avaliable checks visit [OSR's post](https://www.osronline.com/article.cfm%5Earticle=325.htm) .<br/>
-Enabling verifier during the development process is extremley important to ensure efficient debugging and driver quality , note that when writing a minifilter you should enable it for both your driver and the fltmgr. <br/>
+A must mention before starting to work on our driver. Driver Verifier can subject Windows drivers to a variety of stresses and tests to find improper behavior. You can configure which tests to run, which allows you to put a driver through heavy stress loads and enforce some worth checking edge cases.
+For a detailed description regarding the various checks that can be enabled , see [OSR's post](https://www.osronline.com/article.cfm%5Earticle=325.htm) .<br/>
+Enabling verifier during the development process is extremley important to ensure efficient development, debugging and driver quality. Note that when writing a minifilter you should enable it for both your driver and the fltmgr. <br/>
 
 ## Detecting encryption 
 We already mentioned entropy as a measure to identify encryption of data, what we also mentioned is the fact compressed data tends to have high entropy.<br/>
