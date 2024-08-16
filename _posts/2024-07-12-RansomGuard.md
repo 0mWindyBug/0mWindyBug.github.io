@@ -414,6 +414,7 @@ typedef struct _HandleContext
 	UNICODE_STRING FinalComponent;
 	ULONG RequestorPid;
 	bool WriteOccured;
+	bool Truncated; 
 	double PreEntropy;
 	double PostEntropy;
 	PVOID OriginalContent;
@@ -468,7 +469,7 @@ Allocating , initializing and attaching a context to the FileObject :
 If the FileObject is monitored (has a context attached to it) , and if it's the first write using the FileObject , capture the initial state of the file. <br/>
 
 ```cpp
-// filtering logic for any I/O other than noncached paging I/O 
+	// filtering logic for all types of I/O other than paging I/O
 	pHandleContext HandleContx = nullptr;
 	status = FltGetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, reinterpret_cast<PFLT_CONTEXT*>(&HandleContx));
 	if (!NT_SUCCESS(status))
@@ -476,8 +477,8 @@ If the FileObject is monitored (has a context attached to it) , and if it's the 
 
 	AutoContext AutoHandleContx(HandleContx);
 	
-	// this is true if the file was opened as truncated or it's not the first write using the handle 
-	if (HandleContx->WriteOccured)
+	// we already have a datapoint 
+	if (HandleContx->WriteOccured || HandleContx->Truncated)
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 
 	HandleContx->WriteOccured = true;
@@ -509,7 +510,7 @@ Again , simply check if the file is monitored and a write has been made, if not 
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 
 	// no write occured , no need to evaluate 
-	if (!HandleContx->WriteOccured)
+	if (!HandleContx->WriteOccured && !HandleContx->Truncated)
 	{
 		FltReleaseContext(HandleContx);
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
@@ -561,7 +562,6 @@ VOID evaluate::EvaluateHandle(PFLT_DEFERRED_IO_WORKITEM FltWorkItem, PFLT_CALLBA
     ULONG FileSize = 0;
     HandleContx->PostEntropy = utils::CalculateFileEntropyByName(HandleContx->Filter, HandleContx->Instance, &HandleContx->FileName, FLT_NO_CONTEXT, nullptr);
 
-    double EntropyDiff = HandleContx->PostEntropy - HandleContx->PreEntropy;
     if (evaluate::IsEncrypted(HandleContx->PreEntropy, HandleContx->PostEntropy))
     {
         if (HandleContx->OriginalContent && HandleContx->InitialFileSize > 0)
@@ -1343,6 +1343,9 @@ Since we set a threshold for number of deleted files we are going to keep track 
 [*] files encrypted by ReadDeleteRansom.exe -> 6
 [*] killed ransomware process!
 ```
+
+
+
 
 
 
