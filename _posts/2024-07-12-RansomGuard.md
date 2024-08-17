@@ -7,8 +7,7 @@ excerpt: "Anti Ransomware minifilter driver"
 
 
 ## Intro
-Ransomware is one of the most simple , yet significant threats facing organizations nowdays. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it.  AV vendors , independent security reseachers and academies all proposing various solutions to mitigate the threat. This blogpost is going to walkthrough the development and design of RansomGuard , covering some fun internals along the way.<br/>
-
+Ransomware is one of the most simple , yet significant threats facing organizations nowdays. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it.  AV vendors ,independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through use of the filter manager. We also discusss the concepts and ideas that led to the design of RansomGuard, and some of the challenges we encountered in its implementation. Challenges that up until this day certian AV solutions are unable to solve. 
 
 ## The filter manager 
 The filter manager provides a level of abstraction allowing driver developers to invest more time into the actual logic of the filter rather than writing a body of "boiler plate" code. Speaking of boiler plate code , writing a legacy file-system filter driver that really **does nothing** can take up to nearly 6,000 lines of code. The filter manager essentially serves as a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.<br/>
@@ -108,7 +107,7 @@ Contexts are extremley useful , and can be attached to the following objects : <
 Depending on the file system there are certian limitations for attaching contexts , e.g The NTFS and FAT file systems do not support file, stream, or file object contexts on paging files, in the pre-create or post-close path, or for IRP_MJ_NETWORK_QUERY_OPEN operations. <br/>
 A minifilter can call ```FltSupports*Contexts``` to check if a context type is supported for the given operation.<br/>
 
-### Context managment 
+## Context managment 
 Context management is probably one of the most frustrating parts of maintaining a minifilter, your unload hangs ? it's often down to incorrect context managment. this is one (of many) reasons to why you should always enable driver verifier , more on this later : ) <br/>
 The filter manager uses reference counting to manage the lifetime of a minifilter context , whenever a context is successfully created,  it is initialized with reference count of one. <br/>
 Whenever a context is referenced, for example by a successful context set or get, the filter manager increments the reference count of the context by one. When a context is no longer needed, its reference count must be decremented. A positive reference count means that the context is usable,  when the reference count becomes zero, the context is unusable, and the filter manager eventually frees it. <br/> 
@@ -116,7 +115,7 @@ Lastly , note the filter manager is the one responsible for derefencing the Set*
 - The attached to system structure is about to go away. For example, when the file system calls FsRtlTeardownPer StreamContexts as part of tearing down the FCB, the Filter Manager will detach any attached stream contexts and dereference them.<br/>
 - The filter instance associated with the context is being detached.  Again taking the stream context example, during instance teardown after the InstanceTeardown callbacks have been made the filter manager will detach any stream contexts associated with this instance from their associated ADVANCED_FCB_HEADER and dereference them. <br/>
 
-#### Context registration 
+## Context registration 
 A minifilter passes the following structure to FltRegisterFilter to register context types <br/>
 ``` cpp
 typedef struct _FLT_CONTEXT_REGISTRATION {
@@ -139,10 +138,12 @@ brought into system memory before it is accessed (read-ahead functionality), to
 retain such information in memory until it is no longer needed (caching of data),
 and possibly to defer writing of modified data to disk to obtain greater efficiency
 (write-behind or delayed-write functionality).<br/>
+It's important to keep caching in mind before making any design decisions in our filter. The integration of caching may cause writes to occur at unexpected times. Moreover , details regarding the operation around cached writes is crucial to understand in relation to manipulating memory mapped I/O. Let's give you a spoiler. When a cached write is initiated the Cc will memory map then portion of the file if it hasn't already. If another process then comes and memroy maps the same file it will get a mapping backed by the same physical pages... this will be extremely  important later on when we try to block mapped page writer writes without breaking the system  ;) 
 
 ## Cached write operation 
-Now , consider a write operation initiated by a user application , let's walkthrough the steps and see where the cache manager is involved.<br/>
-1. The user application initiates a write operation, which causes control to be
+So, after mentioning the importance of understanding the details behind a cached write for the rest of the article, let's dive into the operations behind it under the hood. 
+<br/>
+1. A user application initiates a write operation, which causes the control to be
 transferred to the I/O Manager in the kernel.<br/>
 2. The I/O Manager directs the write request to the appropriate file system
 driver using an IRP. the buffer may be mapped to system space , or an mdl may be created or the virtual address of the buffer may be directly passed <br/>
@@ -151,13 +152,13 @@ driver using an IRP. the buffer may be mapped to system space , or an mdl may be
 5. The cache manager examines its data structures to determine whether there is a mapped view for the file containing the range of bytes being modified by the user. If no such mapped view exists, the cache manager creates a
 mapped view for the file region <br/>
 6. The cache manager performs a memory copy operation from the user's buffer to the virtual address range associated with the mapped view for the file. <br/>
-7. If the virtual address range is not backed by physical pages, a page faul toccurs and control is transferred to the VMM. <br/>
+7. If the virtual address range is not backed by physical pages, a page fault occurs and control is transferred to the VMM. <br/>
 8. The VMM allocates physical pages, which will be used to contain the requested data <br/>
 9. The cache manager completes the copy operation from the user's buffer to the virtual address range associated with the mapped view for the file <br/>
 10. The cache manager returns control to the file system driver. The user data is now resident in system memory and has not yet been written to storage. So when is the data actually transfered to storage ? the Cc's lazy writer is responsible to decrease the window in which the cache is dirty by writing cached data back to storage , it coordinates with the mapped page writer thread of the Mm which is responsible to write dirty mapped pages back to storage whenever a certian threshold is met (there's also the modified page writer which shares similar responsbility , with pagefiles). <br/> The noncached write to storage may be initiated by either of them <br/>  
 11. The file system driver completes the original IRP sent to it by the I/O manager and the I/O manager completes the original user write request <br/> 
 
-It's important to keep caching in mind before making any design decisions in our filter.<br/>
+
 
 ## A few words regarding Paging I/O 
 Paging I/O is essentially a term used to describe I/O initiated by either the Mm or Cc. For paging reads , it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages , the read is of course non cached as it must be satisifed from storage.<br/>
@@ -172,7 +173,7 @@ A third way could be creating a copy of the file with the new name , opened for 
 Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly implemented by ransomwares in the wild.<br/> 
 
 ## Detecting encryption 
-To detect encryption of data we are going to leverage Shanoon Entropy.
+To detect encryption of data we are going to leverage [Shanoon Entropy](https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuardBeta/RansomGuard/filters.cpp)..
 We need to collect two datapoints,
 First, that represents the initial entropy of the contents of the file and another that represents the entropy of the contents of the file after modifcation.<br/> 
 Based on statistical tests against a large set of files of different types, we came up with the following measurement, that takes into consideration the initial entropy of the file, limiting false positives due to high entropy file typs (e.g. archives) <br/> 
@@ -207,10 +208,9 @@ Consider the most obvious sequence seen in ransomwares :
 There a few things to consider:<br/>
 1. A file may be truncated when opened , consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
 2. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
+
 Considering #1, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of ```FILE_SUPERSEDE``` , ```FILE_OVERWRITE``` or ```FILE_OVERWRITE_IF```. In such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
-Considering #2 , the post modification state of the file is captured whenever whenever IRP_MJ_CLEANUP is sent.<br/>
-that is, whenever the last handle to a file object is closed (represents the usermode state), in contrast IRP_MJ_CLOSE is sent whenever the last reference is released from the file object (represents the system state). <br/>
-Whenever I need a reminder of what's allowed in PostCleanup , I go to the FAT source code and look for the check it does. The following can be seen in the ```FatCheckIsOperationLegal``` :
+Considering #2 , the post modification state of the file is captured whenever ```IRP_MJ_CLEANUP ``` is sent. That is, whenever the last handle to a file object is closed (represents the usermode state). In contrast ```IRP_MJ_CLOSE ``` is sent whenever the last reference is released from the file object (represents the system state). Whenever I need a reminder of what's allowed in PostCleanup , I go to the FAT source code and look for the check it does. The following can be seen in the ```FatCheckIsOperationLegal``` :
 
 ```cpp
         //
