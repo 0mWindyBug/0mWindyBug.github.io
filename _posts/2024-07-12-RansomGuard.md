@@ -173,7 +173,7 @@ A third way could be creating a copy of the file with the new name , opened for 
 Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly implemented by ransomwares in the wild.<br/> 
 
 ## Detecting encryption 
-To detect encryption of data we are going to leverage [Shanoon Entropy](https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuardBeta/RansomGuard/filters.cpp)..
+To detect encryption of data we are going to leverage [Shannon Entropy](https://en.m.wikipedia.org/wiki/Entropy_(information_theory)).
 We need to collect two datapoints,
 First, that represents the initial entropy of the contents of the file and another that represents the entropy of the contents of the file after modifcation.<br/> 
 Based on statistical tests against a large set of files of different types, we came up with the following measurement, that takes into consideration the initial entropy of the file, limiting false positives due to high entropy file typs (e.g. archives) <br/> 
