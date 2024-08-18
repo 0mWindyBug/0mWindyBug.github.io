@@ -16,7 +16,10 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 [Caching & Paging I/O](#The-NT-cache-manager)
 * The NT cache manager
 * Cached write operation
-* A few words on paging I/O [Detecting encryption](#Detecting-encryption)
+* A few words on paging I/O
+
+[Detecting encryption](#Detecting-encryption)
+
 [Ransomware variations](#Ransomware-variations)
 * Tracking & Evaluating file handles
 * Filtering and dealing with challenges posed by memory mapped I/O 
