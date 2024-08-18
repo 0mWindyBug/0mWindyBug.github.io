@@ -9,13 +9,19 @@ excerpt: "Anti Ransomware minifilter driver"
 ## Intro
 Ransomware is one of the most simple , yet significant threats facing organizations nowdays. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it. AV vendors, independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through use of the filter manager. We also discuss the concepts and ideas that led to the design of RansomGuard, and the challenges we encountered in its implementation, some of which are not properly dealt with by certian AV solutions up until this day!
 
+## Table of contents 
+
+- [The filter manager](#the-filter-manager)
+- [Minifilter contexts](#Minifilter-contexts)
+- [The NT cache manager](#The-NT-cache-manager)
+
 ## The filter manager 
 Our story begins with the filter manager. The filter manager provides a level of abstraction allowing driver developers to invest more time into writing the actual logic of the filter rather than writing a body of "boiler plate" code. Speaking of boiler plate code , writing a legacy file-system filter driver that really **does nothing** can take up to nearly 6,000 lines of code. The filter manager essentially serves as a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.<br/>
 After each minifilter processes the request, the filter manager then calls through to the next device object in the device stack , if any.<br/>
 It's important to note that easy to write does not mean easy to design , which remains a fairly complex task with minifilters, of course - depending on the minifilter's task in hand. Nevertheless it makes it possible to go from design to a working filter in weeks rather than months, which is great. <br/>
 
 
-## Interacting with the filter manager
+### Interacting with the filter manager
 Whilst familarity with the filter manager is somewhat neccassery for the rest of the article , I'll  try to provide a brief summary of the basics, in any case MSDN is your friend and feel free to skip this section if you ever worked with the filter manager.  <br/>
 In order to tell the filter manager what filters to register , a minifilter calls ```FltRegisterFilter``` , passing the ```FLT_REGISTRATION``` structure : <br/>
 ``` cpp
@@ -107,7 +113,7 @@ Contexts are extremley useful , and can be attached to the following objects : <
 Depending on the file system there are certian limitations for attaching contexts , e.g The NTFS and FAT file systems do not support file, stream, or file object contexts on paging files, in the pre-create or post-close path, or for IRP_MJ_NETWORK_QUERY_OPEN operations. <br/>
 A minifilter can call ```FltSupports*Contexts``` to check if a context type is supported for the given operation.<br/>
 
-## Context managment 
+### Context managment 
 Context management is probably one of the most frustrating parts of maintaining a minifilter, your unload hangs ? it's often down to incorrect context managment. this is one (of many) reasons to why you should always enable driver verifier , more on this later : ) <br/>
 The filter manager uses reference counting to manage the lifetime of a minifilter context , whenever a context is successfully created,  it is initialized with reference count of one. <br/>
 Whenever a context is referenced, for example by a successful context set or get, the filter manager increments the reference count of the context by one. When a context is no longer needed, its reference count must be decremented. A positive reference count means that the context is usable,  when the reference count becomes zero, the context is unusable, and the filter manager eventually frees it. <br/> 
@@ -115,7 +121,7 @@ Lastly , note the filter manager is the one responsible for derefencing the Set*
 - The attached to system structure is about to go away. For example, when the file system calls FsRtlTeardownPer StreamContexts as part of tearing down the FCB, the Filter Manager will detach any attached stream contexts and dereference them.<br/>
 - The filter instance associated with the context is being detached.  Again taking the stream context example, during instance teardown after the InstanceTeardown callbacks have been made the filter manager will detach any stream contexts associated with this instance from their associated ADVANCED_FCB_HEADER and dereference them. <br/>
 
-## Context registration 
+### Context registration 
 A minifilter passes the following structure to FltRegisterFilter to register context types <br/>
 ``` cpp
 typedef struct _FLT_CONTEXT_REGISTRATION {
@@ -140,7 +146,7 @@ and possibly to defer writing of modified data to disk to obtain greater efficie
 (write-behind or delayed-write functionality).<br/>
 It's important to keep caching in mind before making any design decisions in our filter. The integration of caching may cause writes to occur at unexpected times. Moreover , details regarding the operation around cached writes is crucial to understand in relation to manipulating memory mapped I/O. Let's give you a spoiler. When a cached write is initiated the Cc will memory map the portion of the file if it hasn't already mapped it. If another process then comes and memroy maps the same file it will get a mapping backed by the same physical pages of those the Cc is using. This will be extremely  important later on when we try to block mapped page writer writes without breaking the system  ;) 
 
-## Cached write operation 
+### Cached write operation 
 So, after mentioning the importance of understanding the details behind a cached write for the rest of the article, let's dive into the operations behind it under the hood. 
 <br/>
 1. A user application initiates a write operation, which causes the control to be
