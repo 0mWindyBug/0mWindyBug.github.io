@@ -11,7 +11,7 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 
 ## Table of contents 
 [The filter manager](#the-filter-manager)
-* Introduction to the filter manager
+* Introduction & the motivation behind the framework
 * Interacting with the filter manager
 * working with and managing contexts
 
