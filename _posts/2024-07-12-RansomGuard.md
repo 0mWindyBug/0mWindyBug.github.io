@@ -12,8 +12,17 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 ## Table of contents 
 
 - [The filter manager](#the-filter-manager)
-- [Minifilter contexts](#Minifilter-contexts)
-- [The NT cache manager](#The-NT-cache-manager)
+* Interacting with the filter manager
+* Minifilter contexts
+- [Caching & Paging I/O](#The-NT-cache-manager)
+* The NT cache manager
+* Cached write operation
+* A few words on paging I/O
+- [Detecting encryption](#Detecting-encryption)
+- [Ransomware variations](#Ransomware-variations)
+* Tracking & Evaluating file handles
+* Filtering and dealing with challenges posed by memory mapped I/O 
+* Filtering file deletions and tracking file-system operations across mulitple handles
 
 ## The filter manager 
 Our story begins with the filter manager. The filter manager provides a level of abstraction allowing driver developers to invest more time into writing the actual logic of the filter rather than writing a body of "boiler plate" code. Speaking of boiler plate code , writing a legacy file-system filter driver that really **does nothing** can take up to nearly 6,000 lines of code. The filter manager essentially serves as a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.<br/>
