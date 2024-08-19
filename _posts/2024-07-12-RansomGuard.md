@@ -10,19 +10,19 @@ excerpt: "Anti Ransomware minifilter driver"
 Ransomware is one of the most simple , yet significant threats facing organizations nowdays. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it. AV vendors, independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through use of the filter manager. We also discuss the concepts and ideas that led to the design of RansomGuard, and the challenges we encountered in its implementation, some of which are not properly dealt with by certian AV solutions up until this day.
 
 ## Table of contents 
-- [The filter manager](#the-filter-manager)
+[The filter manager](#the-filter-manager)
 * Introduction & the motivation behind the framework
 * Interacting with the filter manager
 * working with and managing contexts
 
-- [Caching & Paging I/O](#The-NT-cache-manager)
+[Caching & Paging I/O](#The-NT-cache-manager)
 * The NT cache manager
 * Cached write operation
 * Paging I/O
 
-- [Detecting encryption](#Detecting-encryption)
+[Detecting encryption](#Detecting-encryption)
 
-- [Ransomware variations](#Ransomware-variations)
+[Ransomware variations](#Ransomware-variations)
 
 [Tracking & Evaluating file handles](#Tracking--Evaluating-file-handles)
 * Truncated files
