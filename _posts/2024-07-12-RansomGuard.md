@@ -202,7 +202,7 @@ Paging I/O is essentially a term used to describe I/O initiated by either the Mm
 For paging writes , it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver , much like with a paging read , to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write<br/> 
 We are going to deal with the challenges posed by filtering paging I/O later on in the article , in relation to memory mapped files.
 
-## Detecting encryption 
+## Detecting encryption {#Detecting-encryption}
 To detect encryption of data we are going to leverage [Shannon Entropy](https://en.m.wikipedia.org/wiki/Entropy_(information_theory)).
 We need to collect two datapoints,
 First, that represents the initial entropy of the contents of the file and another that represents the entropy of the contents of the file after modifcation.<br/> 
@@ -230,14 +230,14 @@ bool evaluate::IsEncrypted(double InitialEntropy, double FinalEntropy)
 0.83 was found to be the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
 As we increase the value of the coefficient the difference between the initial entropy value and the final entropy value to be considered suspicious increases. <br/>
 
-## Ransomware variations 
+## Ransomware variations {#Ransomware-variations}
 When trying to mitigate ransomware , all the variants of the encryption process need to be considered as it can happen very differently. 
 The most popular variation is where the files are opened in R/W, read and encrypted in place, closed and then (optionally) renamed.<br/> 
 Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it is considered more evasive as the write is initiated asynchronously by the system process rather than by the ransomware process (tbh anything asynchrnous is harder to deal with from a defensive point of view). This trick alone was enough for Maze, LockFile and others to evade some well known security solutions.<br/>
 A third way could be creating a copy of the file with the new name , opened for W, the original file is read, its encrypted content is written inside and the original file is deleted.<br/>
 Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly implemented by ransomwares in the wild.<br/> 
 
-## Tracking & Evaluating file handles   
+## Tracking & Evaluating file handles {#Tracking--Evaluating-file-handles}
 As mentioned ransomware encryption can happen very differently when it comes to file-system operations, we are going to tackle each variation seperatley as each sequence requires it's own filtering logic.<br/>
 Consider the most obvious sequence seen in ransomwares : 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence1.png" alt="">
@@ -247,7 +247,7 @@ There a few things to consider:<br/>
 2. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
 
 Considering #1, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of ```FILE_SUPERSEDE``` , ```FILE_OVERWRITE``` or ```FILE_OVERWRITE_IF```. In such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
-Considering #2 , the post modification state of the file is captured whenever ```IRP_MJ_CLEANUP ``` is sent. That is, whenever the last handle to a file object is closed (represents the usermode state). In contrast ```IRP_MJ_CLOSE ``` is sent whenever the last reference is released from the file object (represents the system state). Whenever I need a reminder of what's allowed in PostCleanup , I go to the FAT source code and look for the check it does. The following can be seen in the ```FatCheckIsOperationLegal``` :
+Considering #2 , we have to make a distinguish between close and cleanup operations. ```IRP_MJ_CLEANUP``` is sent whenever the last user reference to the file is closed(e.g. the last handle is closed).  In contrast ```IRP_MJ_CLOSE ``` is sent whenever the last reference is released from the file object, representing the closure of the system state. Really what we want here is a datapoint when the file can no longe be modified using the same file object. Whenever I need a reminder of what's allowed in post cleanup , I go to the FAT source code and look for the check it does. The following can be seen in the ```FatCheckIsOperationLegal``` :
 
 ```cpp
         //
@@ -284,7 +284,7 @@ Considering #2 , the post modification state of the file is captured whenever ``
 ```
 
 Of course other file systems might allow other things, but FAT is always a good baseline.<br/>
-Clearly , a non paging write is not allowed , so it's safe to assume the file will not be modified (again , excluding paging I/O - we will deal with that later)  after the handle is closed by the user which makes post cleanup good enough to use as our second datapoint.<br/>
+Clearly , a non paging write is not allowed , so it's safe to assume the file will not be modified ( excluding paging I/O - we will deal with that later)  after the handle is closed by the user which makes post cleanup good enough to use as our second datapoint.<br/>
 The following diagram summarizes RansomGuard's design for evaluating operations across the same handle.<br/>
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
@@ -1013,7 +1013,7 @@ RansomGuard deals with Maze comfortably , for a deatiled description of Maze che
 ```
 
 
-## Filtering file deletions 
+## Filtering file deletions {##Filtering-file-deletions}
 A file or directory is deleted when a deletion request is pending and the last user reference to the file is released (that is, the last ```IRP_MJ_CLEANUP``` is sent to the file system). A deletion request can be initiated in one of two ways : 
 * ```IRP_MJ_CREATE``` with the ```FILE_DELETE_ON_CLOSE``` flag set.
 * ```IRP_MJ_SET_INFORMATION``` with ```FileDispositionInformation``` passing ```FILE_DISPOSITION_INFORMATION``` structure with the ```DeleteFile``` boolean set to true.
