@@ -28,10 +28,17 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 * Truncated files
 * Cleanup vs Close
 * FatCheckIsOperationLegal
-* Filters implementation  
+* Filters implementation
+* RansomGuard against WannaCry
 
 [Filtering and dealing with challenges posed by memory mapped I/O](#Filtering-Memory-Mapped-IO)
-* 
+* Memory mapped files from a ransomware perspective
+* Synchronous flush
+* Asynchronous mapped page writer write
+* Building asynchronous context
+* Paging I/O write filtering
+* Blocking a mapped page writer write
+* RansomGuard against Maze
 
 [Filtering file deletions and tracking file-system operations across mulitple handles](#Filtering-file-deletions)
 
