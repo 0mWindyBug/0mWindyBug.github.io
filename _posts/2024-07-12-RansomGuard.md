@@ -614,7 +614,7 @@ Knowing WannaCry follows the CreateFile -> ReadFile -> WriteFile -> CloseFile se
 00000476	249.45210266	[*] killed ransomware process!	
 ```
 
-## Filtering Memory Mapped I/O 
+## Filtering Memory Mapped I/O  {#Filtering-Memory-Mapped-IO}
 Usage of memory mapped files to perform the encryption has become more and more common around ransomware families over the years, which makes it harder for behavior based anti-ransomware solutions to keep track of what is going on, as mentioned this is due to the nature of memory mapped I/O.<br/>
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence2.png" alt="">
 
