@@ -168,7 +168,7 @@ typedef struct _FLT_CONTEXT_REGISTRATION {
 ```
 The ```ContextCleanupCallback``` is called right before the context goes away ,  useful for releasing internal context resources <br/> 
 
-## The NT cache manager 
+## The NT cache manager {#The-NT-cache-manager}
 The windows cache manager is a software-only component which is closely integrated with the windows memory manager , to make file-system data accessible within the virtual memory system. Although constant advances in storage technologies have led to faster and cheaper secondary storage devices, accessing data off secondary storage media is
 still much slower than accessing data buffered in system memory, so it becomes important to have data
 brought into system memory before it is accessed (read-ahead functionality), to
