@@ -10,12 +10,12 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 
 ## Table of contents 
 
-[The filter manager](##the-filter-manager)
+[The filter manager](#the-filter-manager)
 * Introduction & the motivation behind the framework
 * Interacting with the filter manager
 * working with and managing contexts
 
-[Caching & Paging I/O](##The-NT-cache-manager)
+[Caching & Paging I/O](#The-NT-cache-manager)
 * The NT cache manager
 * Cached write operation
 * Paging I/O
