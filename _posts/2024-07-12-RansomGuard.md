@@ -1013,7 +1013,7 @@ RansomGuard deals with Maze comfortably , for a deatiled description of Maze che
 ```
 
 
-## Filtering file deletions {##Filtering-file-deletions}
+## Filtering file deletions {#Filtering-file-deletions}
 A file or directory is deleted when a deletion request is pending and the last user reference to the file is released (that is, the last ```IRP_MJ_CLEANUP``` is sent to the file system). A deletion request can be initiated in one of two ways : 
 * ```IRP_MJ_CREATE``` with the ```FILE_DELETE_ON_CLOSE``` flag set.
 * ```IRP_MJ_SET_INFORMATION``` with ```FileDispositionInformation``` passing ```FILE_DISPOSITION_INFORMATION``` structure with the ```DeleteFile``` boolean set to true.
