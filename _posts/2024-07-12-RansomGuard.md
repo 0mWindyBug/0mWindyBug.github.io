@@ -5,6 +5,42 @@ tags: [posts]
 excerpt: "Anti Ransomware minifilter driver"
 ---
 
+## Table of contents
+{:toc}
+
+* Introduction & the motivation behind the framework
+* Interacting with the filter manager
+* Working with and managing contexts
+
+* The NT cache manager
+* Cached write operation
+* Paging I/O
+
+* Detecting encryption
+
+* Ransomware variations
+
+* Tracking & Evaluating file handles
+* Truncated files
+* Cleanup vs Close
+* FatCheckIsOperationLegal
+* Filters implementation
+* RansomGuard against WannaCry
+
+* Filtering Memory Mapped I/O
+* Memory mapped files from a ransomware perspective
+* Synchronous flush
+* Asynchronous mapped page writer write
+* Building asynchronous context
+* Paging I/O write filtering
+* Blocking a mapped page writer write
+* RansomGuard against Maze
+
+* Filtering file deletions
+* How NTFS & FAT handle file deletions under the hood  
+* Racing deletes
+* Extending the driver
+* RansomGuard against a custom sample
 
 ## Intro
 Ransomware is one of the most simple , yet significant threats facing organizations nowdays. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it. AV vendors, independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through use of the filter manager. We also discuss the concepts and ideas that led to the design of RansomGuard, and the challenges we encountered in its implementation, some of which are not properly dealt with by certian AV solutions up until this day.
