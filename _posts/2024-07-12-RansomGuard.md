@@ -629,7 +629,7 @@ Whilst I personally haven't seen such usage in ransomwares, an application can e
 ```FlushViewOfFile``` maps to ```MmFlushVirtualMemory``` in ntos , which in turn calls ```MmFlushSectionInternal``` as shown below : <br/>
 <img src="{{ site.url }}{{ site.baseurl }}/images/AcquireCc.png" alt="">
 
-Followed by the following callstack : <br/> 
+The call to ```MmFlushSectionInternal``` is followed by the following callstack : <br/> 
 <img src="{{ site.url }}{{ site.baseurl }}/images/SynchrnousFlush.png" alt="">
 
 Clerarly , ```MmFlushSectionInternal``` , where the actual write is initiated , is surrounded by two FsRtl callbacks :
