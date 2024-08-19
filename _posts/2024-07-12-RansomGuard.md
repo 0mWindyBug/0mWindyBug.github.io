@@ -15,7 +15,7 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 * Interacting with the filter manager
 * working with and managing contexts
 
-[The NT cache manager](#The-NT-cache-manager)
+[Caching & Paging I/O](#The-NT-cache-manager)
 * The NT cache manager
 * Cached write operation
 * Paging I/O
