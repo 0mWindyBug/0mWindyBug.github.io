@@ -24,7 +24,7 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 
 [Ransomware variations](#Ransomware-variations)
 
-[Tracking & Evaluating file handles](#Tracking-Evaluating-file-handles)
+[Tracking & Evaluating file handles](#Tracking--Evaluating-file-handles)
 
 
 [Filtering and dealing with challenges posed by memory mapped I/O](#Filtering-Memory-Mapped-IO)
