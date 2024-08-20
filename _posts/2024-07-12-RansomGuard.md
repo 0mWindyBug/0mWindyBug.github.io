@@ -41,7 +41,7 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 * RansomGuard against Maze
 
 [Filtering file deletions](#Filtering-file-deletions)
-* How NTFS & FAT handle file deletions  
+* How NTFS & FAT handle file deletions
 * Racing deletes
 * Extending the driver
 * RansomGuard against a custom sample
@@ -1019,11 +1019,12 @@ RansomGuard deals with Maze comfortably , for a deatiled description of Maze che
 A file or directory is deleted when a deletion request is pending and the last user reference to the file is released (that is, the last IRP_MJ_CLEANUP is sent to the file system). A deletion request can be initiated in one of the following ways : 
 * IRP_MJ_CREATE with the ```FILE_DELETE_ON_CLOSE``` flag set.
 * IRP_MJ_SET_INFORMATION with ```FileDispositionInformation``` passing a ```FILE_DISPOSITION_INFORMATION ``` structure with the ```DeleteFile``` boolean set to true.
-* IRP_MJ_SET_INFORMATION with ```FileDispositionInformationEx``` passing a ```FILE_DISPOSITION_INFORMATION_EX``` structure with the ```FILE_DISPOSITION_DELETE``` set.
+* IRP_MJ_SET_INFORMATION with ```FileDispositionInformationEx``` passing a ```FILE_DISPOSITION_INFORMATION_EX``` structure with the ```FILE_DISPOSITION_DELETE``` set to true.
   - ```FILE_DISPOSITION_ON_CLOSE``` can also be set to control the delete on close state based on the ```FILE_DISPOSITION_DELETE``` flag.
 
 There's an interesting twist to this, the delete disposition can also be reset by calling the same IRP_MJ_SET_INFORMATION request with the ```FileDispositionInformation``` information class with the ```DeleteFile``` member set to FALSE, or with the ```FileDispositionInformationEx``` information class with the ```FILE_DISPOSITION_DELETE``` cleared. This means that the file will not be deleted from the file system once the final handle is closed, cancelling the previous request to delete the file. This call (e.g. to set ```DeleteFile``` to FALSE) will be successful regardless of whether the file had a delete disposition set or not. In fact, one can call to set and reset the disposition many times and whoever called last to set the disposition to either true or false will win.<br/>
-Since the delete disposition can also be manipulated from different handles , it must be a per stream flag , again looking at the FastFat source in ```FatSetDispositionInfo``` confirms  the flag is indeed part of the ```FCB```. (operations on the same on disk object share the same file control block, pointed by ```FileObject->FsContext```).
+Since the delete disposition can also be manipulated from different handles , it must be a per stream flag , again looking at the FastFat source in ```FatSetDispositionInfo``` confirms  the flag is indeed part of the ```FCB```. 
+* For those not familiar with the ```FCB``` structure , just know operations on the same on-disk object share the same file control block, referenced by ```FileObject->FsContext```.
 
 ```cpp
 SetFlag( Fcb->FcbState, FCB_STATE_DELETE_ON_CLOSE );
@@ -1042,7 +1043,7 @@ FileObject->DeletePending = TRUE;
     
 ```
 
-But we already mentioned there's yet another way to reuqest a delete , ```IRP_MJ_CREATE``` with the ```FILE_DELETE_ON_CLOSE``` flag , looking at the FastFat source in ```FatCommonCreate``` : 
+But we already mentioned there's yet another way to reuqest a delete , ```IRP_MJ_CREATE``` with the ```FILE_DELETE_ON_CLOSE``` flag set , looking at the FastFat source in ```FatCommonCreate``` : 
 
 ```cpp
             PCCB Ccb = (PCCB)FileObject->FsContext2;
@@ -1054,7 +1055,7 @@ But we already mentioned there's yet another way to reuqest a delete , ```IRP_MJ
 ```
 
 We can see that the flag is translated into a ```CCB``` flag, ```CCB_FLAG_DELETE_ON_CLOSE```. The ```CCB``` (context control block) is unique per FILE_OBJECT structure,  so basically the FILE_OBJECT remembers that it was opened with the ```FILE_DELETE_ON_CLOSE``` flag. The question is, where is the ```CCB_FLAG_DELETE_ON_CLOSE``` flag converted into ```FCB_STATE_DELETE_ON_CLOSE``` ? <br/>
-A quick search shows this happens during ```IRP_MJ_CLEANUP``` , as shown below:
+A quick search shows this happens during ```IRP_MJ_CLEANUP``` , as shown below :
 ```cpp
 if (FlagOn(Ccb->Flags, CCB_FLAG_DELETE_ON_CLOSE)) {
 
@@ -1073,11 +1074,11 @@ if (FlagOn(Ccb->Flags, CCB_FLAG_DELETE_ON_CLOSE)) {
             ProcessingDeleteOnClose = TRUE;
 ```
 the usage of the ```CCB``` flag for delete on close has some implications worth noting :
-* Since the  ```FCB``` flag isn't set up until cleanup, an ```IRP_MJ_QUERY_INFORMATION``` request with the ```FileStandardInformation``` information class will not return the ```DeletePending``` flag set even though the file is going to be deleted.
-* Trying to set the ```DeleteFile``` flag to FALSE will have no effect since the ```FILE_DISPOSITION_INFORMATION``` structure only affects the ```FCB_STATE_DELETE_ON_CLOSE``` flag and not the ```CCB``` one.
-* To clear DeleteOnClose state , one can issue an ```IRP_MJ_SET_INFORMATION``` request with the ```FILE_DISPOSITION_INFORMATION_EX``` structure enabling the ```FILE_DISPOSITION_ON_CLOSE```
+* Since the  ```FCB``` flag isn't set up until cleanup, an ```IRP_MJ_QUERY_INFORMATION``` request with the ```FileStandardInformation``` information class will return the ```DeletePending``` flag set to FALSE even though the file is going to be deleted.
+* Trying to set the ```DeleteFile``` flag to FALSE will have no effect since the ```FILE_DISPOSITION_INFORMATION``` structure only affects the ```FCB_STATE_DELETE_ON_CLOSE``` flag and not the ```CCB``` one , which will eventually be promoted to the FCB. 
+* To clear the delete on close state , one can issue an ```IRP_MJ_SET_INFORMATION``` request with the ```FILE_DISPOSITION_INFORMATION_EX``` structure enabling the ```FILE_DISPOSITION_ON_CLOSE```
 
-One interesting issue we are going to face when tracking file deletes is the fact the NT I/O stack is asynchrnous and as such the order in which a minifilter sees requests is not necessarily the order in which the file system sees them. Consider two ```IRP_MJ_SET_INFORMATION``` requests with ```FileDispoisition``` once in which the ```DeleteFile``` flag is set to true and another to false.  Moreover , they are racing in a way that the filter sees both pre operation callbacks before it sees the post operation callback for either of them (in other words both requests are being processed by layers below the filter at the same time). When a filter sees these requests it might see the one that sets it to TRUE and then the one that sets it to FALSE and assume that the delete disposition was set and then reset and so the file won't be deleted. However, it's very possible that the file system will received the request that sets the delete disposition to FALSE before the one it sets it to TRUE and so it will delete the file. This is clearly not a frequent case but it can happen (e.g. a minifilter below us in the stack pended the request).<br/> 
+One interesting issue we are going to face when tracking file deletes is the fact the NT I/O stack is asynchronous and as such the order in which a minifilter sees requests is not necessarily the order in which the file system sees them. Consider two ```IRP_MJ_SET_INFORMATION``` requests with the ```FileDispoisitionInformation``` class. Once in which the ```DeleteFile``` flag is set to true and another to false.  Moreover , they are racing in a way that the filter sees both pre operation callbacks before it sees the post operation callback for either of them (in other words, both requests are being processed by layers below the filter at the same time). When a filter sees these requests it might see the one that sets it to TRUE and then the one that sets it to FALSE and assume that the delete disposition was set and then reset and so the file won't be deleted. However, it's very possible that the file system will receive the request that sets the delete disposition to FALSE before the one that sets it to TRUE and,  so it will delete the file. This is not necessarily a frequent case but it can happen (e.g. a minifilter below us in the stack pended the request).<br/> 
 
 Rewind the reason we are interested in deletes are the following sequences of operations:
 <img src="{{ site.url }}{{ site.baseurl }}/images/DeleteOnCloseSeq.png" alt="">
@@ -1144,7 +1145,7 @@ typedef struct _HandleContext
 	int  NumSetInfoOps;
 }HandleContext, * pHandleContext;
 ```
-We also have to start filtering new files, if they are opened with write access. 
+We also have to start filtering new files, as long as they are opened with write access. 
 ```cpp
 	const auto& params = Data->Iopb->Parameters.Create;
 
@@ -1168,9 +1169,9 @@ HandleContx->NewFile = NewFile;
 ```
 
 ### Managing  CCB_FLAG_DELETE_ON_CLOSE and FCB_STATE_DELETE_ON_CLOSE 
-We are only interested in ```IRP_MJ_SET_INFORMATION``` requests with either the ```FileDispositionInformation``` or ```FileDispositionInformationEx``` information class . 
-To handle racing deletes , we maintain a context counter field ```NumOfSetInfoOps``` to represent the number of changes to the delete disposition in flight. If there's already some operations in flight, no point calling postop. Since there will be no postop (where the counter is decremented) , the value will forever stay 1 or more being one of the conditions for checking deletion at cleanup.<br/>
-below is our pre set information filter.
+We are only interested in ```IRP_MJ_SET_INFORMATION``` requests with either the ```FileDispositionInformation``` or ```FileDispositionInformationEx``` information classes.
+To handle racing deletes , we maintain a context counter field ```NumOfSetInfoOps``` to represent the number of changes to the delete disposition in flight. If there's already some operations in flight, no point calling our post operation. Since there will be no post operation (where the counter is decremented) , the value will forever stay 1 or more , which is one of the conditions we will check for at cleanup to consider the file as a deletion candidate.<br/>
+Our pre set information filter : 
 ```cpp
 
 	switch (Data->Iopb->Parameters.SetFileInformation.FileInformationClass) {
@@ -1238,7 +1239,7 @@ We use our potstop ```IRP_MJ_SET_INFORMATION``` handler to update the state of `
 	return FLT_POSTOP_FINISHED_PROCESSING;
 ```
 
-In the worker queued in post cleanup , if the deletion candidate was deleted we will add a new entry for the file in the ```DeletedFiles``` list of the process. We limit the number of entries in the list to a threshold (configured to 20) enough to detect the ransomware, but one that also limits memory usage. 
+In our evaluation worker , we will check if the file was actually deleted in case it was a deletion candidate. If so , a new entry for it will be constructed in the corresponding process entry structure , allowing us to maintain state across different file objects. 
 ```cpp
 typedef struct _DeletedFile
 {
@@ -1250,7 +1251,7 @@ typedef struct _DeletedFile
 }DeletedFile, * pDeletedFile;
 ```
 
-To check if a file is deleted we can either call ```FltQueryInformationFile``` and check for ```STATUS_FILE_DELETED``` or try and open the file and check for ```STATUS_OBJECT_NAME_NOT_FOUND```. The following is added to our evaluation work item :
+To check if a file is deleted we can either call ```FltQueryInformationFile``` and check for ```STATUS_FILE_DELETED``` or try and open the file and check for ```STATUS_OBJECT_NAME_NOT_FOUND``` , which is what we check for in ```utils::IsFileDeleted``` : 
 ```cpp
   // if delete on close was set , delete pending was set or there was a racing set disposition check if the file was deleted 
     if (HandleContx->CcbDelete || HandleContx->FcbDelete || HandleContx->NumSetInfoOps > 0)
@@ -1268,7 +1269,7 @@ To check if a file is deleted we can either call ```FltQueryInformationFile``` a
         
     }
 ```
-Finally , whenever a write is initiated to a new file we will check if it was previously deleted by the process. If so , we will copy the datapoint stored in the ```DeletedFiles``` list of the process entry structure to the file object context.  We have to make a technical definition as to what a "same file" exactly means. Consider a Word document. User opens X.DOCX, deletes some of It, adds some more, and saves it. Is that the same file that he opened? Suppose he saves it with a different name? Is it the same file now? The potential permutations are endless. Since ransomwares have a tendency for changing file extensions will define "same file" as a file with the same full name , ignroing the extension.
+Finally , whenever a write is initiated to a monitored new file ,  we will check if it was previously deleted by the process. If so , the datapoint stored under the process entry structure is copied to the file object context.  We have to make a technical definition as to what we refer to when using the term "same file". Consider a Word document. User opens X.DOCX, deletes some of it, adds some more, and saves it. Is that the same file that he opened? Suppose he saves it with a different name? Is it the same file now? The potential permutations are endless. Since ransomwares have a tendency for changing file extensions will define "same file" as a file with the same full name , ignoring the extension.
 ```cpp
 // we are only interested in new files that have been previously deleted by the same process (same name ignoring the extension) 
 	// if that's the case , copy original content and size into the context's initial datapoint and mark it for evaluation (HandleContx->WriteOccured)
