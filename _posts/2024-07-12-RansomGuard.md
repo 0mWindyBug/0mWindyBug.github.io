@@ -1270,6 +1270,7 @@ To check if a file is deleted we can either call ```FltQueryInformationFile``` a
 ```
 Finally , whenever a write is initiated to a new file we will check if it was previously deleted by the process. If so , we will copy the datapoint stored in the ```DeletedFiles``` list of the process entry structure to the file object context.  We have to make a technical definition as to what a "same file" exactly means. Consider a Word document. User opens X.DOCX, deletes some of It, adds some more, and saves it. Is that the same file that he opened? Suppose he saves it with a different name? Is it the same file now? The potential permutations are endless. Since ransomwares have a tendency for changing file extensions will define "same file" as a file with the same full name , ignroing the extension.
 ```cpp
+/ we are only interested in new files that have been previously deleted by the same process (same name ignoring the extension) 
 	// if that's the case , copy original content and size into the context's initial datapoint and mark it for evaluation (HandleContx->WriteOccured)
 	// then free resources owned by the process entry , so the resources's lifetime is more accurate (file object lifetime over process lifetime) 
 	// otherwise no need to mark HandleContx->WriteOccured as there's no point evaluating 
@@ -1279,27 +1280,28 @@ Finally , whenever a write is initiated to a new file we will check if it was pr
 		DeletedData DeletedFileData = files::GetDeletedFileContent(&HandleContx->FileName, HandleContx->RequestorPid);
 		if (DeletedFileData.Content)
 		{
-			DbgPrint("[*] new file was created with the same name of a previously deleted file %wZ\n", HandleContx->FinalComponent);
 
 			// if it's the first write to this new file 
 			if (!HandleContx->WriteOccured)
 			{
 
 				// copy datapoint from process entry to context 
-HandleContx->InitialFileSize = DeletedFileData.Size;
-HandleContx->OriginalContent = ExAllocatePoolWithTag(NonPagedPool, DeletedFileData.Size, TAG);
+				HandleContx->InitialFileSize = DeletedFileData.Size;
+				HandleContx->OriginalContent = ExAllocatePoolWithTag(NonPagedPool, DeletedFileData.Size, TAG);
 
 				if(!HandleContx->OriginalContent)
 					return FLT_PREOP_SUCCESS_NO_CALLBACK;
 
 				RtlCopyMemory(HandleContx->OriginalContent, DeletedFileData.Content, DeletedFileData.Size);
+				
 				HandleContx->PreEntropy = DeletedFileData.PreEntropy;
+
 				HandleContx->WriteOccured = true;
+
 				HandleContx->SavedContent = true;
 
 				// remove deleted file from process entry 
-				if (files::RemoveDeletedFileByName(&HandleContx->FileName, HandleContx->RequestorPid))
-					DbgPrint("[*] copied resources from proc entry to file object context!\n");
+				files::RemoveDeletedFileByName(&HandleContx->FileName, HandleContx->RequestorPid);
 			}
 			
 		}
