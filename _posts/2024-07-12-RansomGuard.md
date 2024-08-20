@@ -37,7 +37,7 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 * Asynchronous mapped page writer write
 * Building asynchronous context
 * Paging I/O write filtering
-* Blocking a mapped page writer write
+* "Blocking" a mapped page writer write
 * RansomGuard against Maze
 
 [Filtering file deletions](#Filtering-file-deletions)
