@@ -8,7 +8,7 @@ excerpt: "Anti Ransomware minifilter driver"
 ## Intro
 Ransomware is one of the most simple , yet significant threats facing organizations nowdays. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it. AV vendors, independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through use of the filter manager. We also discuss the concepts and ideas that led to the design of RansomGuard, and the challenges we encountered in its implementation, some of which are not properly dealt with by certian AV solutions up until this day.
 
-## Table of contents 
+## Overview 
 
 [The filter manager](#the-filter-manager)
 * Introduction & the motivation behind the framework
@@ -1338,7 +1338,7 @@ Since we set a threshold for number of deleted files we are going to keep track 
 
 
 ## Wrapping up {#Wrapping-up}
-RansomGuard is not perfect and there are ways around it's heuristics for sure, from using IPC to break operation sequences to directly sending IRPs to NTFS. Having said that, RansomGuard does detect and prevent the vast majority of successfull ransomwars operating in the wild, which is cool. I'd like to use this opportunity to thank [Matti](https://x.com/mattiwatti1?lang=he) & [Jonas](https://twitter.com/jonaslyk)for their respective contributions throughout the R&D  process. As always, feel free to contact me on X for any questions, feedback, or otherwise, you may have! Thanks for reading!
+RansomGuard is not perfect and there are ways around it's heuristics for sure, from using IPC to break operation sequences to directly sending IRPs to NTFS. Having said that, RansomGuard does detect and prevent the vast majority of successfull ransomwars operating in the wild, which is cool. I'd like to use this opportunity to thank [Matti](https://x.com/mattiwatti1?lang=he) & [Jonas](https://twitter.com/jonaslyk) for their respective contributions throughout the R&D  process. As always, feel free to contact me on X for any questions, feedback, or otherwise, you may have! Thanks for reading!
 
 
 
