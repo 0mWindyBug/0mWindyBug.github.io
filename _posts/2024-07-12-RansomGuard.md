@@ -41,7 +41,7 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 * RansomGuard against Maze
 
 [Filtering file deletions](#Filtering-file-deletions)
-* How NTFS & FAT handle file deletions under the hood  
+* How NTFS & FAT handle file deletions  
 * Racing deletes
 * Extending the driver
 * RansomGuard against a custom sample
