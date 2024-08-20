@@ -1308,7 +1308,7 @@ HandleContx->OriginalContent = ExAllocatePoolWithTag(NonPagedPool, DeletedFileDa
 	}
 ```
 From there on , RansomGuard will evaluate the file object normally , capturing the second datapoint at post cleanup.
-To test RansomGuard , I wrote a sample that initiates the following operations for every file on the C drive : 
+To test RansomGuard, We will use a sample that initiates the following operations for every file on the C drive : 
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/ProcmonReadDelete.png" alt="">
 
