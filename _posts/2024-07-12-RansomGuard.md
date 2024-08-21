@@ -388,7 +388,7 @@ typedef struct _Process
 Since we use a statistical logic to identify encryption, a threshold number of encrypted files by a  process must be met before we consider it as ransomware. The ```EncryptedFiles``` counter is used for that matter, and the rest of the structure will make sense later on in the blogpost. <br/> 
 
 ### PostCreate 
-In our PostCreate filter , if the file is not new and the file-system supports FileObject contexts for the given operation(not supported in the paging I/O path) -  we initialize our FileObject context structure and attach it to the file object:
+post create , if the file is not new and the file system supports file object contexts for the given operation we initialize our context structure and attach it to the file object, the context is defined as below.
 
 ```cpp
 typedef struct _HandleContext
@@ -408,7 +408,7 @@ typedef struct _HandleContext
 }HandleContext, * pHandleContext;
 
 ```
-Checking for FileObject context support and filtering out new files : 
+Walking through the code , we start by checking for file object contexts support and filter out new files : 
 ```cpp
 	pCreateCompletionContext PreCreateInfo = (pCreateCompletionContext)CompletionContext;
 
@@ -421,10 +421,8 @@ Checking for FileObject context support and filtering out new files :
 		return FLT_POSTOP_FINISHED_PROCESSING;
 	}
 
-	const auto& params = Data->Iopb->Parameters.Create;
-
 ```
-Allocating , initializing and attaching a context to the FileObject : 
+Next we allocate, initialize and attach thecontext to the file object.
 ```cpp
 	pHandleContext HandleContx = nullptr;
 	NTSTATUS status = FltAllocateContext(FltObjects->Filter, FLT_STREAMHANDLE_CONTEXT, sizeof(HandleContext), NonPagedPool, reinterpret_cast<PFLT_CONTEXT*>(&HandleContx));
@@ -451,7 +449,7 @@ Allocating , initializing and attaching a context to the FileObject :
 ```
 
 ### PreWrite 
-If the FileObject is monitored (has a context attached to it) , and if it's the first write using the FileObject , capture the initial state of the file. <br/>
+If the file object is monitored (has a context attached to it), and if it's the first write using the file object and the file was mot truncated during create, we will capture the initial state of the file. <br/>
 
 ```cpp
 	// filtering logic for all types of I/O other than paging I/O
@@ -472,7 +470,7 @@ If the FileObject is monitored (has a context attached to it) , and if it's the 
 
 	return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
-within ```utils::CalculateFileEntropy``` , the original content of the file is backed up in the context.<br/>
+Within th  ```utils::CalculateFileEntropy``` utility, the original content of the file is backed up in the context.<br/>
 ```cpp
  Entropy = utils::CalculateEntropy(DiskContent, FileInfo.EndOfFile.QuadPart);
 
@@ -486,7 +484,7 @@ within ```utils::CalculateFileEntropy``` , the original content of the file is b
 ```
 
 ### PreCleanup 
-Again , simply check if the file is monitored and a write has been made, if not there's no need to evaluate the context. <br/>
+Again , we simply check here if the file is monitored and whether the file has been modified. If not there's no need to evaluate the context. <br/>
 
 ```cpp
 	pHandleContext HandleContx = nullptr;
@@ -507,7 +505,7 @@ Again , simply check if the file is monitored and a write has been made, if not 
 ```
 
 ### PostCleanup 
-At this point the file cannot be modified using the same handle , due to IRQL restrictions capturing the second datapoint must be deferred to a worker thread, this is done by returning ```FLT_POSTOP_MORE_PROCESSING_REQUIRED```.  <br/>
+At this point the file cannot be modified using the same file object , due to IRQL restrictions capturing the second datapoint must be deferred to a worker thread, this is done by returning ```FLT_POSTOP_MORE_PROCESSING_REQUIRED```.  <br/>
 
 ```cpp
 	pHandleContext HandleContx = (pHandleContext)CompletionContext;
@@ -563,10 +561,10 @@ VOID evaluate::EvaluateHandle(PFLT_DEFERRED_IO_WORKITEM FltWorkItem, PFLT_CALLBA
 }
 
 ```
-where ```processes::UpdateEncryptedFiles``` increases the process's ```EncryptedFiles``` counter and terminates it if the threshold is met.<br/>
+Where the ```processes::UpdateEncryptedFiles``` function is responsible to increase the process's ```EncryptedFiles``` counter and kill it if the threshold is met.<br/>
 
 ### RansomGuard against WannaCry 
-Knowing WannaCry follows the CreateFile -> ReadFile -> WriteFile -> CloseFile sequence , we tested what we have so far against it : 
+Knowing WannaCry follows the CreateFile -> ReadFile -> WriteFile -> CloseFile sequence, we tested what we have so far against it : 
 * 10 files encrypted , 10 of which RansomGuard restored ! 
 * successfully killed WannaCry
 * Debug output : 
