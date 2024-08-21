@@ -49,7 +49,8 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 [Wrapping up](#Wrapping-up)
 
 ## The filter manager 
-Our story begins with the filter manager. The filter manager provides a level of abstraction allowing driver developers to invest more time into writing the actual logic of the filter rather than writing a body of "boiler plate" code. Speaking of boiler plate code , writing a legacy file-system filter driver that really **does nothing** can take up to nearly 6,000 lines of code. The filter manager essentially serves as a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.<br/>
+The filter manager (FltMgr.sys) is a system-supplied kernel-mode driver that implements and exposes functionality commonly required in file system filter drivers.
+It provides a level of abstraction allowing driver developers to invest more time into writing the actual logic of the filter rather than writing a body of "boiler plate" code. Speaking of boiler plate code , writing a legacy file-system filter driver that **does nothing** can take up to nearly 6,000 lines of code. The filter manager essentially serves as a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.<br/>
 After each minifilter processes the request, the filter manager then calls through to the next device object in the device stack , if any.<br/>
 It's important to note that easy to write does not mean easy to design , which remains a fairly complex task with minifilters, of course - depending on the minifilter's task in hand. Nevertheless it makes it possible to go from design to a working filter in weeks rather than months, which is great. <br/>
 
@@ -207,8 +208,8 @@ We are going to deal with the challenges posed by filtering paging I/O later on 
 ## Detecting encryption {#Detecting-encryption}
 To detect encryption of data we are going to leverage [Shannon Entropy](https://en.m.wikipedia.org/wiki/Entropy_(information_theory)).
 We need to collect two datapoints,
-First, that represents the initial entropy of the contents of the file and another that represents the entropy of the contents of the file after modifcation.<br/> 
-Based on statistical tests against a large set of files of different types, we came up with the following measurement, that takes into consideration the initial entropy of the file, limiting false positives due to high entropy file typs (e.g. archives) <br/> 
+Initial, that represents the initial state of the data (file's content) and another that represents the state of the data post modification.<br/> 
+We will use the follwing measurement, based on statistical tests against a large set of files of different types. It takes into account the initial entropy of the file, limiting false positives that may arise due to high entropy file types. (e.g. archives).  
 
 ```cpp
 // statistical logic to determine encryption 
