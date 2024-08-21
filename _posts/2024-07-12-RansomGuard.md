@@ -134,9 +134,8 @@ typedef struct _FLT_CALLBACK_DATA {
 
 
 ## Minifilter contexts 
-A context is a structure that is defined by the minifilter driver and that can be associated with a filter manager object.<br/>
-The filter manager provides support for minifilter drivers to associate contexts with objects and preserve state across I/O operations.<br/>
-Contexts are extremley useful , and can be attached to the following objects : <br/>
+A context is a structure defined by a minifilter driver that can be associated with a filter manager object. The filter manager provides support for minifilter drivers to associate contexts with objects and preserve state across I/O operations.
+Contexts are extremley useful, and can be attached to the following objects : <br/>
     - Files <br/>
     - Instances <br/>
     - Streams <br/>
@@ -144,14 +143,11 @@ Contexts are extremley useful , and can be attached to the following objects : <
     - Transactions <br/>
     - Volumes <br/>
     
-Depending on the file system there are certian limitations for attaching contexts , e.g The NTFS and FAT file systems do not support file, stream, or file object contexts on paging files, in the pre-create or post-close path, or for IRP_MJ_NETWORK_QUERY_OPEN operations. <br/>
-A minifilter can call ```FltSupports*Contexts``` to check if a context type is supported for the given operation.<br/>
+Depending on the file system there are certian limitations for attaching contexts, e.g The NTFS and FAT file systems do not support file, stream, or file object contexts on paging files, in the pre-create or post-close path, or for IRP_MJ_NETWORK_QUERY_OPEN operations. A minifilter can call ```FltSupports*Contexts``` to check if a context type is supported for the given operation.
 
 ### Context managment 
-Context management is probably one of the most frustrating parts of maintaining a minifilter, your unload hangs ? it's often down to incorrect context managment. this is one (of many) reasons to why you should always enable driver verifier , more on this later : ) <br/>
-The filter manager uses reference counting to manage the lifetime of a minifilter context , whenever a context is successfully created,  it is initialized with reference count of one. <br/>
-Whenever a context is referenced, for example by a successful context set or get, the filter manager increments the reference count of the context by one. When a context is no longer needed, its reference count must be decremented. A positive reference count means that the context is usable,  when the reference count becomes zero, the context is unusable, and the filter manager eventually frees it. <br/> 
-Lastly , note the filter manager is the one responsible for derefencing the Set* reference , it does that in the following conditions: <br/>
+Context management is probably one of the most frustrating parts of maintaining a minifilter, your unload hangs? it's often down to incorrect context managment. This is one (of many) reasons to why you should always enable driver verifier.
+The filter manager uses reference counting to manage the lifetime of a minifilter context, whenever a context is successfully created, it's initialized with a reference count of one. Whenever a context is referenced, for example by a successful context set or get call, the filter manager increments the reference count of the context by one. When a context is no longer needed, it's reference count must be decremented. A positive reference count means that the context is usable, when the reference count becomes zero, the context is unusable, and the filter manager eventually frees it. Lastly, note the filter manager is the one responsible for derefencing the Set* reference, it does that in the following conditions: <br/>
 - The attached to system structure is about to go away. For example, when the file system calls FsRtlTeardownPer StreamContexts as part of tearing down the FCB, the Filter Manager will detach any attached stream contexts and dereference them.<br/>
 - The filter instance associated with the context is being detached.  Again taking the stream context example, during instance teardown after the InstanceTeardown callbacks have been made the filter manager will detach any stream contexts associated with this instance from their associated ADVANCED_FCB_HEADER and dereference them. <br/>
 
@@ -172,17 +168,17 @@ typedef struct _FLT_CONTEXT_REGISTRATION {
 The ```ContextCleanupCallback``` is called right before the context goes away ,  useful for releasing internal context resources <br/> 
 
 ## The NT cache manager {#The-NT-cache-manager}
-The windows cache manager is a software-only component which is closely integrated with the windows memory manager , to make file-system data accessible within the virtual memory system. Although constant advances in storage technologies have led to faster and cheaper secondary storage devices, accessing data off secondary storage media is
+The windows cache manager is a software-only component which is closely integrated with the windows memory manager, to make file-system data accessible within the virtual memory system. Although constant advances in storage technologies have led to faster and cheaper secondary storage devices, accessing data off secondary storage media is
 still much slower than accessing data buffered in system memory, so it becomes important to have data
 brought into system memory before it is accessed (read-ahead functionality), to
 retain such information in memory until it is no longer needed (caching of data),
 and possibly to defer writing of modified data to disk to obtain greater efficiency
 (write-behind or delayed-write functionality).<br/>
-It's important to keep caching in mind before making any design decisions in our filter. The integration of caching may cause writes to occur at unexpected times. Moreover , details regarding the operation around cached writes is crucial to understand in relation to manipulating memory mapped I/O. Let's give you a spoiler. When a cached write is initiated the Cc will memory map the portion of the file if it hasn't already mapped it. If another process then comes and memroy maps the same file it will get a mapping backed by the same physical pages of those the Cc is using. This will be extremely  important later on when we try to block mapped page writer writes without breaking the system  ;) 
+It's important to keep caching in mind before making any design decisions in our filter. The integration of caching may cause writes to occur at unexpected times. Moreover, details regarding the workings of cached writes is crucial to understand in relation to manipulating memory mapped I/O. A little spoiler, when a cached write is initiated the Cc will memory map the portion of the file if it hasn't already mapped it. If another process then comes and memroy maps the same file it will get a mapping backed by the same physical pages of those the Cc is using. This is an important detial to keep in mind for later on in the blogpost in relation to "blocking" a mapped page writer write without breaking the system  ;) 
 
 ### Cached write operation 
-So, after mentioning the importance of understanding the details behind a cached write for the rest of the article, let's dive into the operations behind it under the hood. 
-<br/>
+So, after mentioning the importance of understanding the details behind a cached write, let's dive into the 11 step process describing a cached write! <br/>
+
 1. A user application initiates a write operation, which causes the control to be
 transferred to the I/O Manager in the kernel.<br/>
 2. The I/O Manager directs the write request to the appropriate file system
@@ -201,9 +197,9 @@ mapped view for the file region <br/>
 
 
 ## A few words regarding Paging I/O 
-Paging I/O is essentially a term used to describe I/O initiated by either the Mm or Cc. For paging reads , it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages , the read is of course non cached as it must be satisifed from storage.<br/>
-For paging writes , it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver , much like with a paging read , to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write<br/> 
-We are going to deal with the challenges posed by filtering paging I/O later on in the article , in relation to memory mapped files.
+Paging I/O is a term used to describe I/O initiated by either the Mm or Cc. For paging reads, it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages, the read is of course non cached as it must be satisifed from storage.<br/>
+For paging writes, it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver, much like with a paging read, to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write.<br/> 
+We are going to deal with the challenges posed by filtering paging I/O later on in the article, in relation to memory mapped files.
 
 ## Detecting encryption {#Detecting-encryption}
 To detect encryption of data we are going to leverage [Shannon Entropy](https://en.m.wikipedia.org/wiki/Entropy_(information_theory)).
@@ -231,26 +227,24 @@ bool evaluate::IsEncrypted(double InitialEntropy, double FinalEntropy)
 }
 ```
 0.83 was found to be the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
-As we increase the value of the coefficient the difference between the initial entropy value and the final entropy value to be considered suspicious increases. <br/>
 
 ## Ransomware variations {#Ransomware-variations}
-When trying to mitigate ransomware , all the variants of the encryption process need to be considered as it can happen very differently. 
+We must consider all variants of the encryption process it can happen very differently. 
 The most popular variation is where the files are opened in R/W, read and encrypted in place, closed and then (optionally) renamed.<br/> 
 Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it is considered more evasive as the write is initiated asynchronously by the system process rather than by the ransomware process (tbh anything asynchrnous is harder to deal with from a defensive point of view). This trick alone was enough for Maze, LockFile and others to evade some well known security solutions.<br/>
-A third way could be creating a copy of the file with the new name , opened for W, the original file is read, its encrypted content is written inside and the original file is deleted.<br/>
-Whilst there are other possiblities , we are going to tackle those 3 as they are (by far) the most commonly seen in ransomwares in the wild.<br/> 
+A third way could be creating a copy of the file with the new name, opened for W, the original file is read, its encrypted content is written inside and the original file is deleted. Whilst there are other possiblities , we are going to tackle those three as they are (by far) the most commonly seen in ransomwares in the wild.<br/> 
 
 ## Tracking & Evaluating file handles {#Tracking--Evaluating-file-handles}
-As mentioned ransomware encryption can happen very differently when it comes to file-system operations, we are going to tackle each variation seperatley as each sequence requires it's own filtering logic.<br/>
-Consider the most obvious sequence seen in ransomwares : 
+As mentioned ransomware encryption can happen very differently when it comes to file-system operations, we are going to tackle each variation seperatley as each sequence requires it's own filtering logic and heuristics.<br/>
+Let's start with the most obvious sequence seen in ransomwares : 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence1.png" alt="">
 
-There a few things to consider:<br/>
-1. A file may be truncated when opened , consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
+There a few things to highlight:<br/>
+1. A file may be truncated when opened, consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
 2. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
 
 Considering #1, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of ```FILE_SUPERSEDE``` , ```FILE_OVERWRITE``` or ```FILE_OVERWRITE_IF```. In such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
-Considering #2 , we have to distinguish between close and cleanup operations. ```IRP_MJ_CLEANUP``` is sent whenever the last user reference to the file is closed(e.g. the last handle is closed).  In contrast ```IRP_MJ_CLOSE ``` is sent whenever the last reference is released from the file object, representing the closure of the system state. Really what we want here is a datapoint when the file can no longe be modified using the same file object. Whenever I need a reminder of what's allowed in post cleanup , I go to the FAT source code and look for the check it does. The following can be seen in the ```FatCheckIsOperationLegal``` :
+Considering #2 , we have to distinguish between close and cleanup operations. ```IRP_MJ_CLEANUP``` is sent whenever the last user reference to the file is closed (e.g. the last handle is closed). In contrast ```IRP_MJ_CLOSE ``` is sent whenever the last reference is released from the file object, representing the system state. Really what we want here is a datapoint when the file can no longer be modified using the same file object. Whenever I need a reminder of what's allowed in post cleanup, I go to the FAT source code and look for the check it does. The following can be seen in the ```FatCheckIsOperationLegal``` :
 
 ```cpp
         //
@@ -286,9 +280,7 @@ Considering #2 , we have to distinguish between close and cleanup operations. ``
    
 ```
 
-Of course other file systems might allow other things, but FAT is always a good baseline.<br/>
-Clearly , a non paging write is not allowed , so it's safe to assume the file will not be modified ( excluding paging I/O - we will deal with that later)  after the handle is closed by the user which makes post cleanup good enough to use as our second datapoint.<br/>
-The following diagram summarizes RansomGuard's design for evaluating operations across the same handle.<br/>
+Of course other file systems might allow other things, but FAT is always a good baseline.Clearly, a non paging write is not allowed, so it's safe to assume the file will not be modified(excluding paging I/O - we will deal with that later)  after the handle is closed by the user which makes post cleanup just about good enough to be used as our second datapoint. The following diagram summarizes RansomGuard's design for evaluating operations across the same handle.<br/>
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
@@ -296,9 +288,9 @@ Next , let's walkthrough each filter.<br/>
 For the full implementation of the filters : [filters.cpp source](https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuardBeta/RansomGuard/filters.cpp).
 
 ### PreCreate 
-Generally speaking , the PreCreate filter is responsible to filter out any uninteresting I/O requests. For now , we are only interested in file opens for R/W , from usermode (so yea , not filtering new files , altough that's going to change later on in the blogpost).
-In addition , as we've discussed earlier this is our only chance to capture the initial state of truncated files , if the file might get truncated - we read the file , calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.
-Lastly , we also use this filter to enforce access restrictions : <br/>
+The PreCreate filter is responsible to filter out any uninteresting I/O requests. For now, we are only interested in file opens for R/W , from usermode (right,we are not filtering new files... For now. It's going to change later on in the blogpost).
+In addition, PreCreate serves as our only chance to capture the initial state of truncated files, if the file might get truncated, we read the file, calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.
+Lastly, we use this filter to enforce access restrictions : <br/>
 * The restore directory shpould be accessible only from kernel mode.
   - The user can connect to RansomGuard's filter port and issue a control to copy the files to a user-accesible location. <br/>
 * A process marked as malicious(ransomware) is blocked from any file-system access.
