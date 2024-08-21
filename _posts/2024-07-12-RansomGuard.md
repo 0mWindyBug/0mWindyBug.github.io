@@ -6,7 +6,7 @@ excerpt: "Anti Ransomware minifilter driver"
 ---
 
 ## Intro
-Ransomware is one of the most simple , yet significant threats facing organizations nowdays. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it. AV vendors, independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through use of the filter manager. We also discuss the concepts and ideas that led to the design of RansomGuard, and the challenges we encountered in its implementation, some of which are not properly dealt with by certian AV solutions up until this day.
+Ransomware is one of the most simple , yet significant threats facing organizations nowdays. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it. AV vendors, independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through the use of the filter manager. We also discuss the concepts and ideas that led to the design of RansomGuard, and the challenges we encountered in its implementation, some of which are not properly dealt with by certian AV solutions up until this day.
 
 ## Overview 
 
@@ -385,7 +385,7 @@ typedef struct _Process
 } Process, * pProcess;
 
 ```
-Since we use a statistical logic to identify encryption , we set a threshold of encrypted files by a process in which we consider it as ransomware, the ```EncryptedFiles``` counter is used for that matter, the rest of the structure will make sense later on in the blogpost. <br/> 
+Since we use a statistical logic to identify encryption, a threshold number of encrypted files by a  process must be met before we consider it as ransomware. The ```EncryptedFiles``` counter is used for that matter, and the rest of the structure will make sense later on in the blogpost. <br/> 
 
 ### PostCreate 
 In our PostCreate filter , if the file is not new and the file-system supports FileObject contexts for the given operation(not supported in the paging I/O path) -  we initialize our FileObject context structure and attach it to the file object:
