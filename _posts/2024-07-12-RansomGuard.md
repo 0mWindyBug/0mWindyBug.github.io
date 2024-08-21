@@ -332,7 +332,7 @@ Let's walkthrough the code , starting with the encforcment of file-system access
 		return FLT_PREOP_COMPLETE;
 	}
 ```
-We are not interested in requests from kernel mode or not for writing  : 
+We are not interested in requests coming from the system or not for writing  : 
 ```cpp
 	// Skip kernel mode or non write requests
 	const auto& params = Data->Iopb->Parameters.Create;
@@ -362,7 +362,7 @@ handling TRUNCATE_EXISTING opens :
 	}
 ```
 
-A process notify routine managed linked list is used to track active processes in the system and maintain process state across different file-system operations, each process described by the following struct : <br/>
+A process notify routine managed linked list is used to track active processes in the system and maintain per-process state across different file objects and operations. Each process described by the following struct : <br/>
 
 ```cpp
 typedef struct _Process
