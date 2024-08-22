@@ -449,7 +449,7 @@ Next we allocate, initialize and attach thecontext to the file object.
 ```
 
 ### PreWrite 
-If the file object is monitored (has a context attached to it), and if it's the first write using the file object and the file was mot truncated during create, we will capture the initial state of the file. <br/>
+If the file object is monitored (has a context attached to it), and if it's the first write using the file object and the file was not truncated during create, we will capture the initial state of the file. <br/>
 
 ```cpp
 	// filtering logic for all types of I/O other than paging I/O
