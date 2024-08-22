@@ -285,7 +285,7 @@ Of course other file systems might allow other things, but FAT is always a good 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
 Next , let's walkthrough each filter.<br/> 
-For the full implementation of the filters : [filters.cpp source](https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuardBeta/RansomGuard/filters.cpp).
+For the full implementation of the filters : [filters.cpp source](https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuard/RansomGuard/filters.cpp).
 
 ### PreCreate 
 The PreCreate filter is responsible to filter out any uninteresting I/O requests. For now, we are only interested in file opens for R/W , from usermode (right,we are not filtering new files... altough that's going to change later on in the blogpost).
