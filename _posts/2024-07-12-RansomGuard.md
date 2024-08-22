@@ -288,7 +288,7 @@ Next , let's walkthrough each filter.<br/>
 For the full implementation of the filters : [filters.cpp source](https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuardBeta/RansomGuard/filters.cpp).
 
 ### PreCreate 
-The PreCreate filter is responsible to filter out any uninteresting I/O requests. For now, we are only interested in file opens for R/W , from usermode (right,we are not filtering new files... For now. It's going to change later on in the blogpost).
+The PreCreate filter is responsible to filter out any uninteresting I/O requests. For now, we are only interested in file opens for R/W , from usermode (right,we are not filtering new files... altough that's going to change later on in the blogpost).
 In addition, PreCreate serves as our only chance to capture the initial state of truncated files, if the file might get truncated, we read the file, calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.
 Lastly, we use this filter to enforce access restrictions : <br/>
 * The restore directory shpould be accessible only from kernel mode.
