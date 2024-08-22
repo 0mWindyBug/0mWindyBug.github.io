@@ -239,7 +239,7 @@ As mentioned ransomware encryption can happen very differently when it comes to 
 Let's start with the most obvious sequence seen in ransomwares : 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence1.png" alt="">
 
-There are a few things to highlight:<br/>
+There are a couple of things to highlight:<br/>
 1. A file may be truncated when opened, consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
 2. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
 
