@@ -240,7 +240,7 @@ Let's start with the most obvious sequence seen in ransomwares :
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence1.png" alt="">
 
 There are a couple of things to highlight:<br/>
-1. A file may be truncated when opened, consequently by the time our filter's post create is invoked the initial state of the file is lost.<br/>
+1. A file may be truncated when opened, consequently by the time our filter's post create callback is invoked the initial state of the file is lost.<br/>
 2. A ransomware may initiate several writes using different byte offsets to modify different portions of the same file.<br/>
 
 Considering #1, we will monitor file opens that may truncate the file, indicated by a CreateDisposition value of ```FILE_SUPERSEDE``` , ```FILE_OVERWRITE``` or ```FILE_OVERWRITE_IF```. In such cases the initial state of the file is captured in pre create, otherwise it is captured when the first write occurs - in pre write.<br/>
