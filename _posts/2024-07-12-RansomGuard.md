@@ -44,7 +44,7 @@ Ransomware is one of the most simple , yet significant threats facing organizati
 * How NTFS & FAT handle file deletions
 * Racing deletes
 * Extending the driver
-* RansomGuard against a custom sample
+* RansomGuard against yet another ransomware variation
 
 [Wrapping up](#Wrapping-up)
 
