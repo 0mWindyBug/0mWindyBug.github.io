@@ -632,7 +632,7 @@ Clerarly , ```MmFlushSectionInternal``` , where the actual write is initiated , 
 Most importantly, for a synchronous flush the write is initiated from the caller's context , perhaps why it's unlikely to see it used in a ransomware.<br/>
 
 ### Asynchronous mapped page writer write 
-In contrast , for an asynchrnous mapped page writer write two different FsRtl callbacks are invoked  : <br/>
+In contrast, for an asynchronous mapped page writer write two different FsRtl callbacks are invoked. <br/>
 * ```FsRtlAcquireFileForModWriteEx``` - ```IRP_MJ_ACQUIRE_FOR_MOD_WRITE``` (before the write)
 * ```FsRtlReleaseFileForModWriteEx``` - ```IRP_MJ_RELEASE_FOR_MOD_WRITE``` (after the write)
 
