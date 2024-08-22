@@ -292,7 +292,7 @@ The PreCreate filter is responsible to filter out any uninteresting I/O requests
 In addition, PreCreate serves as our only chance to capture the initial state of truncated files, if the file might get truncated, we read the file, calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.
 Lastly, we use this filter to enforce access restrictions : <br/>
 * The restore directory should be accessible only from kernel mode.
-  - The user can connect to RansomGuard's [filter port](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/communication-between-user-mode-and-kernel-mode) and issue a control to copy the files to a user-accesible location. <br/>
+  - The user can connect to RansomGuard's [filter port](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/communication-between-user-mode-and-kernel-mode) and issue a control to copy the files to a user-accessible location. <br/>
 * A process marked as malicious(ransomware) is blocked from any file-system access.
 <br/>
 
