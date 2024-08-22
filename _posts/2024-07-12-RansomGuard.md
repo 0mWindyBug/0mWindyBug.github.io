@@ -1332,7 +1332,7 @@ Since we set a threshold for number of deleted files we are going to keep track 
 
 
 ## Wrapping up {#Wrapping-up}
-RansomGuard is not perfect and there are ways around it's heuristics for sure, from using IPC to break operation sequences to directly sending IRPs to NTFS. Having said that, RansomGuard does detect and prevent the vast majority of successful ransomwares operating in the wild, which is cool. I'd like to use this opportunity to thank [Matti](https://x.com/mattiwatti1?lang=he) & [Jonas](https://twitter.com/jonaslyk) for their respective contributions throughout the R&D  process. As always, feel free to contact me on [X](https://twitter.com/0xwindybug) for any questions, feedback, or otherwise, you may have! Thanks for reading!
+RansomGuard is not perfect and there are ways around it's heuristics for sure, from using IPC to break per-process context to directly sending IRPs to NTFS. Having said that, RansomGuard does detect and prevent the vast majority of successful ransomwares operating in the wild, which is cool. I'd like to use this opportunity to thank [Matti](https://x.com/mattiwatti1?lang=he) & [Jonas](https://twitter.com/jonaslyk) for their respective contributions throughout the R&D  process. As always, feel free to contact me on [X](https://twitter.com/0xwindybug) for any questions, feedback, or otherwise, you may have! Thanks for reading!
 
 
 
