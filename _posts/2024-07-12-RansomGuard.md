@@ -470,7 +470,7 @@ If the file object is monitored (has a context attached to it), and if it's the 
 
 	return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
-Within th  ```utils::CalculateFileEntropy``` utility, the original content of the file is backed up in the context.<br/>
+Within the ```utils::CalculateFileEntropy``` utility, the original content of the file is backed up in the context.<br/>
 ```cpp
  Entropy = utils::CalculateEntropy(DiskContent, FileInfo.EndOfFile.QuadPart);
 
