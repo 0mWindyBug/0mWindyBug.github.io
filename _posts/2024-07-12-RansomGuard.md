@@ -748,7 +748,7 @@ If that's indeed the case:
 
 ### Noncached paging I/O write filtering
 We know memory mapped I/O , regardless if synchronous (explicit flush) or asynchronous (mapped / modified page writer write) comes in the form of noncached paging I/O.<br/> 
-Up until now , such I/O has been indirectly filtered out as it has no support for FileObject contexts, we can add the following check at the start of our PreWrite filter.<br/>
+Up until now, such I/O has been indirectly filtered out as NTFS does not provide support for file object contexts in th paging I/O path. We can add the following check at the start of our pre write filter.<br/>
 ```cpp
 // not interested in writes to the paging file 
 	if (FsRtlIsPagingFile(FltObjects->FileObject))
