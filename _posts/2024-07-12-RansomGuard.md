@@ -340,7 +340,7 @@ We are not interested in requests coming from the system or not for writing  :
 		|| (params.SecurityContext->DesiredAccess & FILE_WRITE_DATA) == 0 )
 		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
-handling TRUNCATE_EXISTING opens : 
+Handling TRUNCATE_EXISTING opens : 
 ```cpp
 	// if file might get truncated , check if it exists and if so capture our initial datapoint here 
 	if (CreateDisposition == FILE_OVERWRITE || CreateDisposition == FILE_OVERWRITE_IF || CreateDisposition == FILE_SUPERSEDE)
