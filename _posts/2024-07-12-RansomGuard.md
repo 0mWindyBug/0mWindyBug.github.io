@@ -280,7 +280,7 @@ Considering #2 , we have to distinguish between close and cleanup operations. ``
    
 ```
 
-Of course other file systems might allow other things, but FAT is always a good baseline.Clearly, a non paging write is not allowed, so it's safe to assume the file will not be modified(excluding paging I/O - we will deal with that later)  after the handle is closed by the user which makes post cleanup just about good enough to be used as our second datapoint. The following diagram summarizes RansomGuard's design for evaluating operations across the same handle.<br/>
+Of course other file systems might allow other things, but FAT is always a good baseline. Clearly, a non paging write is not allowed, so it's safe to assume the file will not be modified (excluding paging I/O - we will deal with that later)  after the handle is closed by the user which makes post cleanup just about good enough to be used as our second datapoint. The following diagram summarizes RansomGuard's design for evaluating operations across the same handle.<br/>
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
