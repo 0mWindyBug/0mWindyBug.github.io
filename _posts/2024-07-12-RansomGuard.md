@@ -15,14 +15,9 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 * Introduction & the motivation behind the framework 
 * working with and managing contexts
 
-[Caching & Paging I/O](#The-NT-cache-manager)
-* The NT cache manager
-* Cached write operation
-* Paging I/O
+[Ransomware variations](#Ransomware-variations)
 
 [Detecting encryption](#Detecting-encryption)
-
-[Ransomware variations](#Ransomware-variations)
 
 [Tracking & Evaluating file handles](#Tracking--Evaluating-file-handles)
 * Truncated files
@@ -37,7 +32,7 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 * Asynchronous mapped page writer write
 * Building asynchronous context
 * Paging I/O write filtering
-* "Blocking" a mapped page writer write
+* "Blocking" a mapped page writer write 
 * RansomGuard against Maze
 
 [Filtering file deletions](#Filtering-file-deletions)
@@ -46,8 +41,10 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 * Extending the driver
 * RansomGuard against yet another ransomware variation
 
+
 [Wrapping up](#Wrapping-up)
 
+[Appendix](#
 ## The filter manager 
 The filter manager (FltMgr.sys) is a system-supplied kernel-mode driver that implements and exposes functionality commonly required in file system filter drivers.
 It provides a level of abstraction allowing driver developers to invest more time into writing the actual logic of the filter rather than writing a body of "boiler plate" code. Speaking of boiler plate code , writing a legacy file-system filter driver that **does nothing** can take up to nearly 6,000 lines of code. The filter manager essentially serves as a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.
@@ -1257,5 +1254,6 @@ Since we set a threshold for number of deleted files we are going to keep track 
 ## Wrapping up {#Wrapping-up}
 RansomGuard is not perfect and there are ways around it's heuristics for sure, from using IPC to break per-process context, directly sending IRPs to NTFS or simply performing [partial encryption](https://www.sentinelone.com/labs/crimeware-trends-ransomware-developers-turn-to-intermittent-encryption-to-evade-detection/). Having said that, RansomGuard does detect and prevent the vast majority of successful ransomwares operating in the wild, which is cool. I'd like to use this opportunity to thank [Matti](https://x.com/mattiwatti1?lang=he) & [Jonas](https://twitter.com/jonaslyk) for their respective contributions throughout the R&D  process. As always, feel free to contact me on [X](https://twitter.com/0xwindybug) for any questions, feedback, or otherwise, you may have! Thanks for reading!
 
+## Appendix {#Appendix}
 
-
+### Cached write operation 
