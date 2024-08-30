@@ -44,7 +44,7 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 
 [Wrapping up](#Wrapping-up)
 
-[Appendix](#
+[Appendix](#Appendix-cached-write-operation)
 ## The filter manager 
 The filter manager (FltMgr.sys) is a system-supplied kernel-mode driver that implements and exposes functionality commonly required in file system filter drivers.
 It provides a level of abstraction allowing driver developers to invest more time into writing the actual logic of the filter rather than writing a body of "boiler plate" code. Speaking of boiler plate code , writing a legacy file-system filter driver that **does nothing** can take up to nearly 6,000 lines of code. The filter manager essentially serves as a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.
@@ -1254,6 +1254,20 @@ Since we set a threshold for number of deleted files we are going to keep track 
 ## Wrapping up {#Wrapping-up}
 RansomGuard is not perfect and there are ways around it's heuristics for sure, from using IPC to break per-process context, directly sending IRPs to NTFS or simply performing [partial encryption](https://www.sentinelone.com/labs/crimeware-trends-ransomware-developers-turn-to-intermittent-encryption-to-evade-detection/). Having said that, RansomGuard does detect and prevent the vast majority of successful ransomwares operating in the wild, which is cool. I'd like to use this opportunity to thank [Matti](https://x.com/mattiwatti1?lang=he) & [Jonas](https://twitter.com/jonaslyk) for their respective contributions throughout the R&D  process. As always, feel free to contact me on [X](https://twitter.com/0xwindybug) for any questions, feedback, or otherwise, you may have! Thanks for reading!
 
-## Appendix {#Appendix}
+## Appendix - cached write operation {#Appendix-cached-write-operation}
+The details behind a cached write can be described in an 11-step process. 
+1. A user application initiates a write operation, which causes the control to be
+transferred to the I/O Manager in the kernel.<br/>
+2. The I/O Manager directs the write request to the appropriate file system
+driver using an IRP. the buffer may be mapped to system space , or an mdl may be created or the virtual address of the buffer may be directly passed. <br/>
+3. The file-system driver recivies the IRP , as long as the operation is buffered (```FILE_FLAG_NO_BUFFERING```) was not passed to CreateFile) , if caching has not yet been initiated for this file, the file system driver initiates caching of the file by invoking the Cache Manager(Cc). The Virtual Memory Manager (Mm) creates a file mapping (section object) for the file to be cached.<br/>
+4. The file system driver simply passes on the write request to the cache manager via ```CcCopyWrite``` <br/>
+5. The cache manager examines its data structures to determine whether there is a mapped view for the file containing the range of bytes being modified by the user. If no such mapped view exists, the cache manager creates a
+mapped view for the file region.<br/>
+6. The cache manager performs a memory copy operation from the user's buffer to the virtual address range associated with the mapped view for the file.<br/>
+7. If the virtual address range is not backed by physical pages, a page fault occurs and control is transferred to the ```Mm```<br/>.
+8. The ```Mm```allocates physical pages, which will be used to contain the requested data <br/>
+9. The cache manager completes the copy operation from the user's buffer to the virtual address range associated with the mapped view for the file <br/>
+10. The cache manager returns control to the file system driver. The user data is now resident in system memory and has not yet been written to storage. So when is the data actually transfered to storage ? the Cc's lazy writer is responsible to decrease the window in which the cache is dirty by writing cached data back to storage , it coordinates with the mapped page writer thread of the ```Mm ``` which is responsible to write dirty mapped pages back to storage whenever a certian threshold is met (there's also the modified page writer which shares similar responsbility , with pagefiles). <br/> The noncached write to storage may be initiated by either of them <br/>  
+11. The file system driver completes the original IRP sent to it by the I/O manager and the I/O manager completes the original user write request <br/> 
 
-### Cached write operation 
