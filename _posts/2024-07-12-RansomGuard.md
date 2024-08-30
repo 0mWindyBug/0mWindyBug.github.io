@@ -33,7 +33,7 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 * Building asynchronous context
 * Filtering Paging I/O
 * The NT cache manager 
-* Blocking a mapped page writer write without breaking the system 
+* Blocking a mapped page writer write without breaking the system
 * RansomGuard against Maze
 
 [Filtering file deletions](#Filtering-file-deletions)
@@ -87,40 +87,6 @@ typedef struct _FLT_CONTEXT_REGISTRATION {
 } FLT_CONTEXT_REGISTRATION, *PFLT_CONTEXT_REGISTRATION;
 ```
 The ```ContextCleanupCallback``` is called right before the context goes away ,  useful for releasing internal context resources <br/> 
-
-## The NT cache manager {#The-NT-cache-manager}
-The windows cache manager is a software-only component which is closely integrated with the windows memory manager, to make file-system data accessible within the virtual memory system. Although constant advances in storage technologies have led to faster and cheaper secondary storage devices, accessing data off secondary storage media is
-still much slower than accessing data buffered in system memory, so it becomes important to have data
-brought into system memory before it is accessed (read-ahead functionality), to
-retain such information in memory until it is no longer needed (caching of data),
-and possibly to defer writing of modified data to disk to obtain greater efficiency
-(write-behind or delayed-write functionality).<br/>
-It's important to keep caching in mind before making any design decisions in our filter. The integration of caching may cause writes to occur at unexpected times. Moreover, details regarding the workings of cached writes is crucial to understand in relation to manipulating memory mapped I/O. A little spoiler, when a cached write is initiated the Cc will memory map the portion of the file if it hasn't already mapped it. If another process then comes and memroy maps the same file it will get a mapping backed by the same physical pages of those the Cc is using. This is an important detial to keep in mind for later on in the blogpost in relation to "blocking" a mapped page writer write without breaking the system  ;) 
-
-### Cached write operation 
-So, after mentioning the importance of understanding the details behind a cached write, let's dive into the 11 step process describing a cached write! <br/>
-
-1. A user application initiates a write operation, which causes the control to be
-transferred to the I/O Manager in the kernel.<br/>
-2. The I/O Manager directs the write request to the appropriate file system
-driver using an IRP. the buffer may be mapped to system space , or an mdl may be created or the virtual address of the buffer may be directly passed <br/>
-3. The file-system driver recivies the IRP , as long as the operation is buffered (FILE_FLAG_NO_BUFFERING was not passed to CreateFile) , if caching has not yet been initiated for this file, the file system driver initiates caching of the file by invoking the Cache Manager(Cc). The Virtual Memory Manager (Mm) creates a file mapping (section object) for the file to be cached.<br/>
-4. The file system driver simply passes on the write request to the cache manager via ```CcCopyWrite``` <br/>
-5. The cache manager examines its data structures to determine whether there is a mapped view for the file containing the range of bytes being modified by the user. If no such mapped view exists, the cache manager creates a
-mapped view for the file region <br/>
-6. The cache manager performs a memory copy operation from the user's buffer to the virtual address range associated with the mapped view for the file. <br/>
-7. If the virtual address range is not backed by physical pages, a page fault occurs and control is transferred to the VMM. <br/>
-8. The VMM allocates physical pages, which will be used to contain the requested data <br/>
-9. The cache manager completes the copy operation from the user's buffer to the virtual address range associated with the mapped view for the file <br/>
-10. The cache manager returns control to the file system driver. The user data is now resident in system memory and has not yet been written to storage. So when is the data actually transfered to storage ? the Cc's lazy writer is responsible to decrease the window in which the cache is dirty by writing cached data back to storage , it coordinates with the mapped page writer thread of the Mm which is responsible to write dirty mapped pages back to storage whenever a certian threshold is met (there's also the modified page writer which shares similar responsbility , with pagefiles). <br/> The noncached write to storage may be initiated by either of them <br/>  
-11. The file system driver completes the original IRP sent to it by the I/O manager and the I/O manager completes the original user write request <br/> 
-
-
-
-## A few words regarding Paging I/O 
-Paging I/O is a term used to describe I/O initiated by either the Mm or Cc. For paging reads, it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages, the read is of course non cached as it must be satisifed from storage.<br/>
-For paging writes, it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver, much like with a paging read, to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write.<br/> 
-We are going to deal with the challenges posed by filtering paging I/O later on in the article, in relation to memory mapped files.
 
 ## Detecting encryption {#Detecting-encryption}
 To detect encryption of data we are going to leverage [Shannon Entropy](https://en.m.wikipedia.org/wiki/Entropy_(information_theory)).
@@ -668,6 +634,8 @@ If that's the case:
 ```
 
 ### Filtering paging I/O 
+Paging I/O is a term used to describe I/O initiated by either the Mm or Cc. For paging reads, it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages, the read is of course non cached as it must be satisifed from storage.<br/>
+For paging writes, it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver, much like with a paging read, to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write.<br/> 
 We know memory mapped I/O , regardless if synchronous (explicit flush) or asynchronous (mapped / modified page writer or even a lazy writer write) comes in the form of noncached paging I/O.<br/> 
 Up until now, such I/O has been indirectly filtered out as NTFS does not provide support for file object contexts in the paging I/O path. We can add the following check at the start of our pre write filter.<br/>
 ```cpp
@@ -825,7 +793,7 @@ pProcess ProcessEntry = processes::GetProcessEntry(HandleToUlong(ProcessId));
 The system thread waits for two minutes and removes the entry. We have to "fake" the pid to avoid ambiguity conflicts(i.e. a new process is created with the same pid that have just been terminated.)<br/>
 
 ### Blocking a mapped page writer write without breaking the system
-So a process may be able to modify a large number of mappings before the mapped page writer activates. This is a challenge as we can't prevent those modifications from occuring by killing the process, the paging writes have already been "scheduled" . The PTEs will be marked as dirty and as a result the corresponding PFNs modified bit will be set. Once we know a ransomware is executing, and is using memory mapped I/O to encrypt files, it's only right to prevent any modification to a file that is backed by a R/W section created by the said ransomware, Especially since we use a statistical approach to identify encryption. We can't block the write (i.e. by returning access denied and ```FLT_PREOP_COMPLETE```), if we did the PFN would have remained modified, inevtibaly causing the mapped page writer to trigger again.
+So a process may be able to modify a large number of mappings before the mapped page writer activates. This is a challenge as we can't prevent those modifications from occuring simply by killing the process, the paging writes have already been "scheduled" and as such The PTEs will be marked as dirty, causing the corresponding PFNs modified bit to be set. Once we know a ransomware is executing, and is using memory mapped I/O to encrypt files, it's only right to prevent any modification to a file that is backed by a R/W section created by the said ransomware, Especially since we use a statistical approach to identify encryption. We can't block the write (i.e. by returning access denied and ```FLT_PREOP_COMPLETE```), if we did the PFN would have remained modified, inevtibaly causing the mapped page writer to trigger again.
 One option could be to lie and "successfully" complete the IRP.
 
 ```cpp
@@ -838,6 +806,14 @@ Whilst it will indeed prevent  modification, it can lead to major cache cohernce
 Can't we just modify the buffer directly? Well, if you ever wrote an encryption filter it's probably a question you already came across. 
 To answer that, let's talk about the cache manager. 
 
+### The NT cache manager {#The-NT-cache-manager}
+The windows cache manager is a software-only component which is closely integrated with the windows memory manager, to make file-system data accessible within the virtual memory system. Although constant advances in storage technologies have led to faster and cheaper secondary storage devices, accessing data off secondary storage media is
+still much slower than accessing data buffered in system memory, so it becomes important to have data
+brought into system memory before it is accessed (read-ahead functionality), to
+retain such information in memory until it is no longer needed (caching of data),
+and possibly to defer writing of modified data to disk to obtain greater efficiency
+(write-behind or delayed-write functionality).<br/>
+Back to our question, the answer lies in the details of how the cache manager handles a cached write. You can check the [Appendix](#Appendix-cached-write-operation) for the step-by-step process of handling a cached write. What's relevant to us is that when a cached write is initiated the Cc will memory map the portion of the file if it hasn't already mapped it. If another process then comes and memroy maps the same file it will get a mapping backed by the same physical pages of those backing the Cc mapping. Manipulating the buffer directly will not only affect the data going to be written to disk, but also the state of the file in the cache. Unlike encryption filters, it's fine from RansomGuard's perspective, as the ransomware is about to corrupt that data. 
 
 ```cpp
 		// if a malicious process has a R/W section object to this file we want to prevent the modification
