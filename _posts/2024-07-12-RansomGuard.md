@@ -12,8 +12,7 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 ## Overview 
 
 [The filter manager](#the-filter-manager)
-* Introduction & the motivation behind the framework
-* Interacting with the filter manager
+* Introduction & the motivation behind the framework 
 * working with and managing contexts
 
 [Caching & Paging I/O](#The-NT-cache-manager)
@@ -52,87 +51,10 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 ## The filter manager 
 The filter manager (FltMgr.sys) is a system-supplied kernel-mode driver that implements and exposes functionality commonly required in file system filter drivers.
 It provides a level of abstraction allowing driver developers to invest more time into writing the actual logic of the filter rather than writing a body of "boiler plate" code. Speaking of boiler plate code , writing a legacy file-system filter driver that **does nothing** can take up to nearly 6,000 lines of code. The filter manager essentially serves as a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.
-After each minifilter processes the request, the filter manager then calls through to the next device object in the device stack, if any.
-It's important to note that easy to write does not mean easy to design,   which remains a fairly complex task with minifilters, of course - depending on the minifilter's task in hand. Nevertheless it makes it possible to go from design to a working filter in weeks rather than months, which is great. <br/>
-
-
-### Interacting with the filter manager
-Whilst familarity with the filter manager is somewhat neccassery for the rest of the article , I'll  try to provide a brief summary of the basics, in any case MSDN is your friend and feel free to skip this section if you ever worked with the filter manager.  <br/>
-In order to tell the filter manager what filters to register , a minifilter calls ```FltRegisterFilter``` , passing the ```FLT_REGISTRATION``` structure : <br/>
-``` cpp
-typedef struct _FLT_REGISTRATION {
-  USHORT                                      Size;
-  USHORT                                      Version;
-  FLT_REGISTRATION_FLAGS                      Flags;
-  const FLT_CONTEXT_REGISTRATION              *ContextRegistration;
-  const FLT_OPERATION_REGISTRATION            *OperationRegistration;
-  PFLT_FILTER_UNLOAD_CALLBACK                 FilterUnloadCallback;
-  PFLT_INSTANCE_SETUP_CALLBACK                InstanceSetupCallback;
-  PFLT_INSTANCE_QUERY_TEARDOWN_CALLBACK       InstanceQueryTeardownCallback;
-  PFLT_INSTANCE_TEARDOWN_CALLBACK             InstanceTeardownStartCallback;
-  PFLT_INSTANCE_TEARDOWN_CALLBACK             InstanceTeardownCompleteCallback;
-  PFLT_GENERATE_FILE_NAME                     GenerateFileNameCallback;
-  PFLT_NORMALIZE_NAME_COMPONENT               NormalizeNameComponentCallback;
-  PFLT_NORMALIZE_CONTEXT_CLEANUP              NormalizeContextCleanupCallback;
-  PFLT_TRANSACTION_NOTIFICATION_CALLBACK      TransactionNotificationCallback;
-  PFLT_NORMALIZE_NAME_COMPONENT_EX            NormalizeNameComponentExCallback;
-  PFLT_SECTION_CONFLICT_NOTIFICATION_CALLBACK SectionNotificationCallback;
-} FLT_REGISTRATION, *PFLT_REGISTRATION;
-```
-we will discuss some of it's members later on , for now let's look at the ```OperationRegistration``` field , of type ```FLT_OPERATION_REGISTRATION``` <br/>
-``` cpp
-typedef struct _FLT_OPERATION_REGISTRATION {
-  UCHAR                            MajorFunction;
-  FLT_OPERATION_REGISTRATION_FLAGS Flags;
-  PFLT_PRE_OPERATION_CALLBACK      PreOperation;
-  PFLT_POST_OPERATION_CALLBACK     PostOperation;
-  PVOID                            Reserved1;
-} FLT_OPERATION_REGISTRATION, *PFLT_OPERATION_REGISTRATION;
-```
-```MajorFunction``` -> is the operation to filter on (e.g. for filtering file reads -> IRP_MJ_READ). <br/>
-``` Flags ``` -> a bitmask of flags specifying when to call the preoperation and postoperation filters ( e.g. don't call for paging I/O). <br/>
-``` PreOperation ```  -> The routine to be called before the operation takes place , with the following prototype: <br/>
-```cpp
-FLT_PREOP_CALLBACK_STATUS PfltPreOperationCallback(
-  [in, out] PFLT_CALLBACK_DATA Data,
-  [in]      PCFLT_RELATED_OBJECTS FltObjects,
-  [out]     PVOID *CompletionContext
-)
-```
-``` PostOperation ``` -> The routine to be called after the operation took place , with the following prototype: <br/>
-```cpp
-PFLT_POST_OPERATION_CALLBACK PfltPostOperationCallback;
-
-FLT_POSTOP_CALLBACK_STATUS PfltPostOperationCallback(
-  [in, out]      PFLT_CALLBACK_DATA Data,
-  [in]           PCFLT_RELATED_OBJECTS FltObjects,
-  [in, optional] PVOID CompletionContext,
-  [in]           FLT_POST_OPERATION_FLAGS Flags
-)
-```
-
-where : <br/>
-``` Data ``` -> A pointer to the callback data structure for the I/O operation : <br/>
-``` cpp
-typedef struct _FLT_CALLBACK_DATA {
-  FLT_CALLBACK_DATA_FLAGS     Flags;
-  PETHREAD                    Thread;
-  PFLT_IO_PARAMETER_BLOCK     Iopb;
-  IO_STATUS_BLOCK             IoStatus;
-  struct _FLT_TAG_DATA_BUFFER *TagData;
-  union {
-    struct {
-      LIST_ENTRY QueueLinks;
-      PVOID      QueueContext[2];
-    };
-    PVOID FilterContext[4];
-  };
-  KPROCESSOR_MODE             RequestorMode;
-} FLT_CALLBACK_DATA, *PFLT_CALLBACK_DATA;
-```
-``` FltObjects ``` -> A pointer to an FLT_RELATED_OBJECTS structure that contains opaque pointers for the objects related to the current I/O request. <br/>
-``` CompletionContext ``` -> context to pass to the post operation routine. <br/>
-
+After each minifilter processes the request, the filter manager then calls through to the next device object in the device stack, if any. 
+Putting it simply, we can use the filter manager to register callbacks to be invoked pre and post a file-system operation as if our driver was part of the file-system device stack. In case you are not familiar with the filter manager API I suggest to review the related docs before proceeding with the article, mainly
+[FLT_REGISTRATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/fltkernel/ns-fltkernel-_flt_registration). 
+It's important to note that easy to write does not mean easy to design,   which remains a fairly complex task with minifilters, of course - depending on the minifilter's task in hand. Nevertheless it makes it possible to go from design to a working filter in weeks rather than months, which is great. 
 
 ## Minifilter contexts 
 A context is a structure defined by a minifilter driver that can be associated with a filter manager object. The filter manager provides support for minifilter drivers to associate contexts with objects and preserve state across I/O operations.
