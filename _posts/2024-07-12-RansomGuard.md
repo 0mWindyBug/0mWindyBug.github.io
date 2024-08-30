@@ -27,12 +27,13 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 * RansomGuard against WannaCry
 
 [Filtering Memory Mapped I/O](#Filtering-Memory-Mapped-IO)
-* Memory mapped files from a ransomware perspective
+* Memory mapped files usage by Ransomwares
 * Synchronous flush
 * Asynchronous mapped page writer write
 * Building asynchronous context
-* Paging I/O write filtering
-* "Blocking" a mapped page writer write 
+* Filtering Paging I/O
+* The NT cache manager 
+* Blocking a mapped page writer write without breaking the system 
 * RansomGuard against Maze
 
 [Filtering file deletions](#Filtering-file-deletions)
@@ -41,10 +42,10 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 * Extending the driver
 * RansomGuard against yet another ransomware variation
 
-
 [Wrapping up](#Wrapping-up)
 
 [Appendix](#Appendix-cached-write-operation)
+
 ## The filter manager 
 The filter manager (FltMgr.sys) is a system-supplied kernel-mode driver that implements and exposes functionality commonly required in file system filter drivers.
 It provides a level of abstraction allowing driver developers to invest more time into writing the actual logic of the filter rather than writing a body of "boiler plate" code. Speaking of boiler plate code , writing a legacy file-system filter driver that **does nothing** can take up to nearly 6,000 lines of code. The filter manager essentially serves as a comprehensive “framework” for writing file system filter drivers. The framework provides the one legacy file system filter driver necessary in the system (fltmgr.sys), and as I/O requests arrive at the filter  manager legacy filter device object, it invokes the registered minifilters using a call out model.
@@ -570,8 +571,8 @@ To track the creation of section objects we can filter ```IRP_MJ_ACQUIRE_FOR_SEC
 ```cpp
 if(Data->Iopb->Parameters.AcquireForSectionSynchronization.SyncType == SyncTypeCreateSection && Data->Iopb->Parameters.AcquireForSectionSynchronization.PageProtection == PAGE_READWRITE && Data->RequestorMode == UserMode)
 ```
-If that's indeed the case: 
-* If not attached yet , a file context is allocated and attached to the file , initialized with the file name.
+If that's the case: 
+* If not attached yet, a file context is allocated and attached to the file, initialized with the file name.
 * the name of the file being mapped is added to a linked list (```SectionsOwned```) of files mapped by the process (under the process entry structure).
 
 ```cpp
@@ -666,9 +667,9 @@ If that's indeed the case:
 	return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
 
-### Noncached paging I/O write filtering
-We know memory mapped I/O , regardless if synchronous (explicit flush) or asynchronous (mapped / modified page writer write) comes in the form of noncached paging I/O.<br/> 
-Up until now, such I/O has been indirectly filtered out as NTFS does not provide support for file object contexts in th paging I/O path. We can add the following check at the start of our pre write filter.<br/>
+### Filtering paging I/O 
+We know memory mapped I/O , regardless if synchronous (explicit flush) or asynchronous (mapped / modified page writer or even a lazy writer write) comes in the form of noncached paging I/O.<br/> 
+Up until now, such I/O has been indirectly filtered out as NTFS does not provide support for file object contexts in the paging I/O path. We can add the following check at the start of our pre write filter.<br/>
 ```cpp
 // not interested in writes to the paging file 
 	if (FsRtlIsPagingFile(FltObjects->FileObject))
@@ -677,8 +678,8 @@ Up until now, such I/O has been indirectly filtered out as NTFS does not provide
 
 	// if noncached paging I/O and not to the pagefile
 	if (FlagOn(Data->Iopb->IrpFlags, IRP_NOCACHE) && FlagOn(Data->Iopb->IrpFlags, IRP_PAGING_IO))
-```																	  
-Next , we are going to check if the file has a file context attached to it , as we are only interested in noncached paging writes to files that have been previously mapped by UM processes.<br/>
+```							
+Next , we are going to check if the file has a file context attached to it, as we are only interested in noncached paging writes to files that have been previously mapped by UM processes.<br/>
 ```cpp
 pFileContext FileContx;
 
@@ -687,8 +688,7 @@ pFileContext FileContx;
 		if (!NT_SUCCESS(status))
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
-Since the mapped page writer flush precisley takes one write , we can reliably capture both of our datapoints  in pre write, as we know about the state of the file before the write and we know what is going to be written.<br/>
-RansomGuard simulates the write in memory as shown below: 
+Since the mapped page writer flush precisly takes one write, we can reliably capture both of our datapoints in pre write, as we know about the state of the file before the write and we know what is going to be written. RansomGuard simulates the write in memory as demonstrated below: 
 ```cpp
 auto& WriteParams = Data->Iopb->Parameters.Write;
 		if (WriteParams.Length == 0)
@@ -766,7 +766,7 @@ auto& WriteParams = Data->Iopb->Parameters.Write;
 		RtlCopyMemory((PVOID)((ULONG_PTR)SimulatedContent + WriteParams.ByteOffset.QuadPart), DataCopy, WriteParams.Length);
 
 ```
-Now that we have two datapoints we can evaluate the contents in the buffers : 
+Now that we have two datapoints we can evaluate the contents in our buffers : 
 ```cpp
 	// evaluate buffers 
 		PreEntropy  = utils::CalculateEntropy(DiskContent, FileSize);
@@ -798,7 +798,7 @@ Now that we have two datapoints we can evaluate the contents in the buffers :
 		}
 
 ```
-If the operation is synchronous, we are in the caller's context and can evaluate normally. otherwise we call ```processes::UpdateEncryptedFilesAsync``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
+If the operation is synchronous, we are in the caller's context and can evaluate normally. Otherwise, we call ```processes::UpdateEncryptedFilesAsync``` in which we increment the ```EncryptedFiles``` counter of any process that previously created a R/W section object for the encrypted file.<br/>
 
 In theory , there's a chance for a process to modify thousands of file mappings and terminate before the mapped page writer activates. Rewind when a process is terminated , our process notify routine is invoked and the process entry structure is freed - we lose all tracking information we had on that process.<br/> To handle such case , if the process terminated has created more than a threshold number of R/W sections , it's removal from the list is deffered to a dedicated system thread : 
 ```cpp
@@ -822,10 +822,10 @@ pProcess ProcessEntry = processes::GetProcessEntry(HandleToUlong(ProcessId));
 			}
 		}
 ```
-The system thread waits for two minutes and removes the entry , we also have to "fake" the pid to avoid ambiguity conflicts (i.e. a new process is created with the same pid that have just been terminated.)<br/>
+The system thread waits for two minutes and removes the entry. We have to "fake" the pid to avoid ambiguity conflicts(i.e. a new process is created with the same pid that have just been terminated.)<br/>
 
-### Blocking a mapped page writer write 
- We have just accepted a process may be able to modify a large number of mappings before the mapped page writer activates. This is a challenge as we can't prevent those modifications from occuring by killing the process, the paging writes have already been "scheduled" . The PTEs will be marked as dirty and as a result the corresponding PFNs modified bit will be set. Once we know a ransomware is executing, and is using memory mapped I/O to encrypt files, it's only right to prevent any modification to a file that is backed by a R/W section created by the said ransomware. After all our encryption detection logic is statistical. We can't block the write (i.e. by returning access denied and ```FLT_PREOP_COMPLETE```) as in such case the PFN remains modified, inevtibaly causing the mapped page writer to trigger again.
+### Blocking a mapped page writer write without breaking the system
+So a process may be able to modify a large number of mappings before the mapped page writer activates. This is a challenge as we can't prevent those modifications from occuring by killing the process, the paging writes have already been "scheduled" . The PTEs will be marked as dirty and as a result the corresponding PFNs modified bit will be set. Once we know a ransomware is executing, and is using memory mapped I/O to encrypt files, it's only right to prevent any modification to a file that is backed by a R/W section created by the said ransomware, Especially since we use a statistical approach to identify encryption. We can't block the write (i.e. by returning access denied and ```FLT_PREOP_COMPLETE```), if we did the PFN would have remained modified, inevtibaly causing the mapped page writer to trigger again.
 One option could be to lie and "successfully" complete the IRP.
 
 ```cpp
@@ -834,7 +834,11 @@ Data->Iosb.Information = Data->Iopb->Parameters.Write.Length;
 return FLT_PREOP_COMPLETE
 ```
 Whilst it will indeed prevent  modification, it can lead to major cache coherncey issues eventually causing applications to fail and potentially the machine to crash.
-Instead we are going to take the following approach : 
+
+Can't we just modify the buffer directly? Well, if you ever wrote an encryption filter it's probably a question you already came across. 
+To answer that, let's talk about the cache manager. 
+
+
 ```cpp
 		// if a malicious process has a R/W section object to this file we want to prevent the modification
 		// we cant simply deny the write as the page will remain dirty which will cause the MPW to trigger again later 
