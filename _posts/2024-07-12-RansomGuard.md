@@ -89,9 +89,9 @@ The ```ContextCleanupCallback``` is called right before the context goes away , 
 
 ## Detecting encryption {#Detecting-encryption}
 To detect encryption of data we are going to leverage [Shannon Entropy](https://en.m.wikipedia.org/wiki/Entropy_(information_theory)).
-We need to collect two datapoints,
-Initial, that represents the initial state of the data (file's content) and another that represents the state of the data post modification.<br/> 
-We will use the follwing measurement, based on statistical tests against a large set of files of different types. It takes into account the initial entropy of the file, limiting false positives that may arise due to high entropy file types. (e.g. archives).  
+To do so we need to collect two datapoints,
+one, that represents the initial state of the data (file's content) and another - that represents the modified state of the file.<br/> 
+We will use the follwing measurement, based on statistical tests performed against a large set of files of different types. It takes into account the initial entropy of the file, limiting false positives that may arise due to high entropy file types. (e.g. archives).  
 
 ```cpp
 // statistical logic to determine encryption 
@@ -115,10 +115,10 @@ bool evaluate::IsEncrypted(double InitialEntropy, double FinalEntropy)
 0.83 was found to be the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
 
 ## Ransomware variations {#Ransomware-variations}
-We must consider all variants of the encryption process as it can happen very differently. 
+Finally, let's talk about ransomwares. When attempting to mitigate ransomware all variants of the encryption process must be considered, as it can happen very differently. 
 The most popular variation is where the files are opened in R/W, read and encrypted in place, closed and then (optionally) renamed.<br/> 
 Another option is memory mapping the files , from a ransomware prespective not only that it's faster,  it is considered more evasive as the write is initiated asynchronously by the system process rather than by the ransomware process (tbh anything asynchrnous is harder to deal with from a defensive point of view). This trick alone was enough for Maze, LockFile and others to evade some well known security solutions.<br/>
-A third way could be creating a copy of the file with the new name, opened for W, the original file is read, its encrypted content is written inside and the original file is deleted. Whilst there are other possiblities , we are going to tackle those three as they are (by far) the most commonly seen in ransomwares in the wild.<br/> 
+A third way could be creating a copy of the file with the new name, opened for W, the original file is read, its encrypted content is written inside and the original file is deleted. Whilst there are other possiblities which we are not going to cover (check [Wrapping Up](#Wrapping-up) for disclaimers), we are going to tackle those three as they are (by far) the most commonly seen in ransomwares in the wild.<br/> 
 
 ## Tracking & Evaluating file handles {#Tracking--Evaluating-file-handles}
 As mentioned ransomware encryption can happen very differently when it comes to file-system operations, we are going to tackle each variation seperatley as each sequence requires it's own filtering logic and heuristics.<br/>
