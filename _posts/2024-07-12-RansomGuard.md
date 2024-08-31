@@ -15,9 +15,9 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 * Introduction & the motivation behind the framework 
 * working with and managing contexts
 
-[Ransomware variations](#Ransomware-variations)
-
 [Detecting encryption](#Detecting-encryption)
+
+[Ransomware variations](#Ransomware-variations)
 
 [Tracking & Evaluating file handles](#Tracking--Evaluating-file-handles)
 * Truncated files
@@ -32,8 +32,7 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 * Asynchronous mapped page writer write
 * Building asynchronous context
 * Filtering Paging I/O
-* The NT cache manager 
-* Blocking a mapped page writer write without breaking the system
+* "Blocking" a mapped page writer write
 * RansomGuard against Maze
 
 [Filtering file deletions](#Filtering-file-deletions)
