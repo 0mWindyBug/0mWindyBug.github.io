@@ -541,13 +541,14 @@ If that's the case:
 * the name of the file being mapped is added to a linked list (```SectionsOwned```) of files mapped by the process (under the process entry structure).
 
 ```cpp
-
-// if new r/w section was created 
+// if a new r/w section was created 
 	if (Data->Iopb->Parameters.AcquireForSectionSynchronization.SyncType == SyncTypeCreateSection && Data->Iopb->Parameters.AcquireForSectionSynchronization.PageProtection == PAGE_READWRITE && Data->RequestorMode == UserMode)
 	{
 		pFileContext FileContx = nullptr;
+		AutoContext Contx(nullptr);
 
-		// allocate FileContext if it does not exist 
+
+		// allocate a file context if it does not exist yet
 		NTSTATUS status = FltGetFileContext(FltObjects->Instance, FltObjects->FileObject, reinterpret_cast<PFLT_CONTEXT*>(&FileContx));
 		if (!NT_SUCCESS(status))
 		{
@@ -556,33 +557,27 @@ If that's the case:
 			if (!NT_SUCCESS(status))
 				return FLT_PREOP_SUCCESS_NO_CALLBACK;
 
+			Contx.Set(FileContx);
+
 			FilterFileNameInformation FileNameInfo(Data);
 			if (!FileNameInfo.Get())
-			{
-				FltReleaseContext(FileContx);
 				return FLT_PREOP_SUCCESS_NO_CALLBACK;
-			}
 
-			// init file name in context 
+			// init context
 			status = FileNameInfo.Parse();
 			if (!NT_SUCCESS(status))
-			{
-				FltReleaseContext(FileContx);
 				return FLT_PREOP_SUCCESS_NO_CALLBACK;
-			}
+			
 
 			FileContx->FileName.MaximumLength = FileNameInfo->Name.MaximumLength;
 			FileContx->FileName.Length = FileNameInfo->Name.Length;
 			if (FileNameInfo->Name.Length == 0 || !FileNameInfo->Name.Buffer)
-			{
-				FltReleaseContext(FileContx);
 				return FLT_PREOP_SUCCESS_NO_CALLBACK;
-			}
+			
 			FileContx->FileName.Buffer = (WCHAR*)ExAllocatePoolWithTag(NonPagedPool, FileNameInfo->Name.MaximumLength, TAG);
-			if (!FileContx->FileName.Buffer) {
-				FltReleaseContext(FileContx);
+			if (!FileContx->FileName.Buffer) 
 				return FLT_PREOP_SUCCESS_NO_CALLBACK;
-			}
+			
 			RtlCopyUnicodeString(&FileContx->FileName, &FileNameInfo->Name);
 
 
@@ -590,43 +585,36 @@ If that's the case:
 			FileContx->FinalComponent.Length = FileNameInfo->FinalComponent.Length;
 
 			if (FileNameInfo->FinalComponent.Length == 0 || !FileNameInfo->FinalComponent.Buffer)
-			{
-				FltReleaseContext(FileContx);
-				return FLT_PREOP_SUCCESS_NO_CALLBACK;
-			}
+					return FLT_PREOP_SUCCESS_NO_CALLBACK;
+			
 			FileContx->FinalComponent.Buffer = (WCHAR*)ExAllocatePoolWithTag(NonPagedPool, FileNameInfo->FinalComponent.MaximumLength, TAG);
-			if (!FileContx->FinalComponent.Buffer) {
-				FltReleaseContext(FileContx);
+			if (!FileContx->FinalComponent.Buffer) 
 				return FLT_PREOP_SUCCESS_NO_CALLBACK;
-			}
+			
 			RtlCopyUnicodeString(&FileContx->FinalComponent, &FileNameInfo->FinalComponent);
 
-			// set context to file 
+			// attach context to file
 			status = FltSetFileContext(FltObjects->Instance, FltObjects->FileObject, FLT_SET_CONTEXT_KEEP_IF_EXISTS, FileContx, nullptr);
 			if (!NT_SUCCESS(status))
-			{
-				FltReleaseContext(FileContx);
-				return FLT_PREOP_SUCCESS_NO_CALLBACK;
-			}
-			
-
-
-			DbgPrint("[*] R/W section is created for %wZ\n", FileContx->FileName);
-
+				return FLT_PREOP_SUCCESS_NO_CALLBACK;		
+		}
+		else
+		{
+			Contx.Set(FileContx);
 		}
 
-		// track section in process section list  
+		DbgPrint("[*] R/W section is created for %wZ\n", FileContx->FinalComponent);
+
+
+		// add section entry in process structure 
 		AutoLock<Mutex>process_list_lock(ProcessesListMutex);
 		pProcess ProcessEntry = processes::GetProcessEntry(FltGetRequestorProcessId(Data));
 		if (!ProcessEntry)
-		{
-			FltReleaseContext(FileContx);
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
-		}
+		
 
 		sections::AddSection(&FileContx->FileName, ProcessEntry);
 
-		FltReleaseContext(FileContx);
 	}
 
 	return FLT_PREOP_SUCCESS_NO_CALLBACK;
@@ -657,50 +645,42 @@ pFileContext FileContx;
 ```
 Since the mapped page writer flush precisly takes one write, we can reliably capture both of our datapoints in pre write, as we know about the state of the file before the write and we know what is going to be written. RansomGuard simulates the write in memory as demonstrated below: 
 ```cpp
-auto& WriteParams = Data->Iopb->Parameters.Write;
+	auto& WriteParams = Data->Iopb->Parameters.Write;
 		if (WriteParams.Length == 0)
-		{
-			FltReleaseContext(FileContx);
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
-		}
+
 
 
 		// retrive the data to be written 
 		if (WriteParams.MdlAddress != nullptr)
 		{
-			DataToBeWritten = MmGetSystemAddressForMdlSafe(WriteParams.MdlAddress,NormalPagePriority | MdlMappingNoExecute);
+			DataToBeWritten = MmGetSystemAddressForMdlSafe(WriteParams.MdlAddress, NormalPagePriority | MdlMappingNoExecute);
 			if (!DataToBeWritten)
-			{
-				FltReleaseContext(FileContx);
 				return FLT_PREOP_SUCCESS_NO_CALLBACK;
-			}
 		}
 		// no mdl was provided so use buffer 
 		else
 		{
 			DataToBeWritten = WriteParams.WriteBuffer;
 		}
-		
+
 		DataCopy = ExAllocatePoolWithTag(NonPagedPool, WriteParams.Length, TAG);
 		if (!DataCopy)
-		{
-			FltReleaseContext(FileContx);
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
-		}
+
+
 
 		// read file from disk and make a copy of it 
 		ULONG FileSize = utils::GetFileSize(FltObjects->Instance, FltObjects->FileObject);
 		if (FileSize == 0)
 		{
-			FltReleaseContext(FileContx);
 			ExFreePoolWithTag(DataCopy, TAG);
-			return FLT_PREOP_SUCCESS_NO_CALLBACK;
+		return FLT_PREOP_SUCCESS_NO_CALLBACK;
 		}
 
 		PVOID DiskContent = utils::ReadFileFromDisk(FltObjects->Instance, FltObjects->FileObject);
 		if (!DiskContent)
 		{
-			FltReleaseContext(FileContx);
 			ExFreePoolWithTag(DataCopy, TAG);
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
 		}
@@ -711,19 +691,19 @@ auto& WriteParams = Data->Iopb->Parameters.Write;
 			RtlCopyMemory(DataCopy,
 				DataToBeWritten,
 				WriteParams.Length);
+
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) {
-			FltReleaseContext(FileContx);
 			ExFreePoolWithTag(DiskContent, TAG);
 			ExFreePoolWithTag(DataCopy, TAG);
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
 		}
+
 // simulate a write in memory 
 		SIZE_T SimulatedSize = (FileSize > WriteParams.ByteOffset.QuadPart + WriteParams.Length) ? FileSize : 		WriteParams.ByteOffset.QuadPart + WriteParams.Length;
 		PVOID SimulatedContent = ExAllocatePoolWithTag(NonPagedPool,SimulatedSize, TAG);
 		if (!SimulatedContent)
 		{
-			FltReleaseContext(FileContx);
 			ExFreePoolWithTag(DiskContent,TAG);
 			ExFreePoolWithTag(DataCopy, TAG);
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
