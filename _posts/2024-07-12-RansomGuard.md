@@ -1250,3 +1250,5 @@ mapped view for the file region.<br/>
 10. The cache manager returns control to the file system driver. The user data is now resident in system memory and has not yet been written to storage. So when is the data actually transfered to storage ? the Cc's lazy writer is responsible to decrease the window in which the cache is dirty by writing cached data back to storage , it coordinates with the mapped page writer thread of the ```Mm ``` which is responsible to write dirty mapped pages back to storage whenever a certian threshold is met (there's also the modified page writer which shares similar responsbility , with pagefiles). <br/> The noncached write to storage may be initiated by either of them <br/>  
 11. The file system driver completes the original IRP sent to it by the I/O manager and the I/O manager completes the original user write request <br/> 
 
+
+
