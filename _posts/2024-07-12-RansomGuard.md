@@ -88,10 +88,7 @@ typedef struct _FLT_CONTEXT_REGISTRATION {
 The ```ContextCleanupCallback``` is called right before the context goes away ,  useful for releasing internal context resources <br/> 
 
 ## Detecting encryption {#Detecting-encryption}
-To detect encryption of data we are going to leverage [Shannon Entropy](https://en.m.wikipedia.org/wiki/Entropy_(information_theory)).
-To do so we need to collect two datapoints,
-one, that represents the initial state of the data (file's content) and another - that represents the modified state of the file.<br/> 
-We will use the follwing measurement, based on statistical tests performed against a large set of files of different types. It takes into account the initial entropy of the file, limiting false positives that may arise due to high entropy file types. (e.g. archives).  
+To detect encryption of data we are going to leverage [Shannon Entropy](https://en.m.wikipedia.org/wiki/Entropy_(information_theory)). We will assume the entire file is going to be encrypted, partial encryption is mentioned towards the end of the article. Anyways, two datapoints are needed - one that represents the initial state of the file and another that represents the modified state of the file. We will use the follwing measurement, which was based on statistical tests performed against a large set of files of different types. It takes into account the initial entropy of the file, limiting false positives that may arise due to high entropy file types. (e.g. archives).  
 
 ```cpp
 // statistical logic to determine encryption 
@@ -112,7 +109,7 @@ bool evaluate::IsEncrypted(double InitialEntropy, double FinalEntropy)
 
 }
 ```
-0.83 was found to be the sweet spot value for the coefficient between detecting encrypted files and limiting false positives.<br/>
+0.83 was found to be the sweet spot value for the coefficient between detecting encrypted files and limiting false positives. 
 
 ## Ransomware variations {#Ransomware-variations}
 Let's talk about ransomwares. When attempting to mitigate ransomware all variants of the encryption process must be considered, as it can happen very differently. 
