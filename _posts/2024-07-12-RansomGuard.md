@@ -115,10 +115,9 @@ bool evaluate::IsEncrypted(double InitialEntropy, double FinalEntropy)
 Let's talk about ransomwares. When attempting to mitigate ransomware all variants of the encryption process must be considered, as it can happen very differently. 
 The most popular variation is where the files are opened in R/W, read and encrypted in place, closed and then (optionally) renamed.<br/> 
 Another option is memory mapping the files , from a ransomware prespective not only that it's faster, it is considered more evasive as the write is initiated asynchronously by the system process rather than by the ransomware process. (really anything asynchronous is harder to deal with from a defensive point of view). This trick alone was enough for Maze, LockFile and others to evade some well known security solutions.
-A third way could be creating a copy of the file with the new name, opened for W, the original file is read, its encrypted content is written inside and the original file is deleted. Whilst there are other possiblities which RansomGuard is not going to cover (check [Wrapping Up](#Wrapping-up) for disclaimers), we are going to tackle those three variants as they are (by far) the most commonly seen in ransomwares in the wild.<br/> 
+A third way could be creating a copy of the file with the new name, opened for W, the original file is read, its encrypted content is written inside and the original file is deleted. Whilst there are other possiblities which RansomGuard is not going to cover (check [Wrapping Up](#Wrapping-up) for disclaimers), we are going to tackle those three variants as they are (by far) the most commonly seen in ransomwares in the wild. We are going to tackle each variation seperatley as each sequence of operations requires it's own filtering logic and heuristics.
 
 ## Tracking & Evaluating file handles {#Tracking--Evaluating-file-handles}
-As mentioned ransomware encryption can happen very differently when it comes to file-system operations, we are going to tackle each variation seperatley as each sequence requires it's own filtering logic and heuristics.<br/>
 Let's start with the most obvious sequence seen in ransomwares : 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence1.png" alt="">
 
@@ -495,9 +494,9 @@ Usage of memory mapped files to perform the encryption has become more and more 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence2.png" alt="">
 
 A file mapping is essentially a section object , with ```CreateFileMapping``` being a wrapper around ```NtCreateSection```.
-To write to a mapped file , an application maps a view of the file to the process and operates on the pages backing the view directly, when modified the corresponding PTEs are marked dirty and when the virtual address range is flushed or unmapped the dirty PTE bit is "pushed out" to the PFN (i.e. the Modified bit gets set). Mofidied PFNs are written out back to storage asynchronously by one of the page writers , for file backed sections by the mapped page writer , and for pagefile backed sections by the modified page writer.<br/>
+To write to a mapped file , an application maps a view of the file to the process and operates on the pages backing the view directly, when modified the corresponding PTEs are marked dirty and when the virtual address range is flushed or unmapped the dirty PTE bit is "pushed out" to the PFN (i.e. the Modified bit gets set). Mofidied PFNs are written out back to storage asynchronously by one of the page writers, for file backed sections by the mapped page writer, and for pagefile backed sections by the modified page writer.<br/>
 
-From the ransomware perspective this is great , the actual write to the file seems as if it was originated from the system process, it can even happen after the process is terminated , and since the ransomware process itself only interacts with memory rather than disk , it's also much faster.
+From the ransomware perspective this is great, the actual write to the file seems as if it was originated from the system process, it can even happen after the process is terminated, and since the ransomware process itself only interacts with memory rather than disk , it's also much faster.
 Our goal is to be able not only to detect those mapped page writer encryptions , but to pinpoint back at the malicious process behind them.<br/>
 
 ### Synchronous flush 
@@ -527,7 +526,7 @@ Note ```IRP_MJ_RELEASE_FOR_MOD_WRITE``` is typically invoked as part of a specia
 Altough not used in RansomGuard, using the Acquire/Release callbacks as two datapoints to filter memory mapped I/O writes is a possability.<br/>
 
 ### Building asynchronous context 
-To connect between a mapped page writer write and the process that memory mapped the file , we have to monitor the creation of section objects.<br/> The heuristic idea is to assume any process that created a R/W section object for the file might be the one that modified the mapping and triggered the aysnchronous write, that means , whenever our minifilter sees a mapped page writer encryption , we will traverse each process and check if it ever created a R/W section for file in question , if so , it's ```EncryptedFiles``` counter will be increased.<br/> The odds for two different processes (one being a ransomware and the other being legitimiate) , to create R/W section objects for the same X number of files , and for those X number of files to also get encrypted are very slim to say the least , and so is the risk for false positives.<br/>
+To connect between a mapped page writer write and the process that memory mapped the file, we have to monitor the creation of section objects.<br/> The heuristic idea is to assume any process that created a R/W section object for the file might be the one that modified the mapping and triggered the aysnchronous write, that means , whenever our minifilter sees a mapped page writer encryption , we will traverse each process and check if it ever created a R/W section for file in question , if so , it's ```EncryptedFiles``` counter will be increased.<br/> The odds for two different processes (one being a ransomware and the other being legitimiate) , to create R/W section objects for the same X number of files , and for those X number of files to also get encrypted are very slim to say the least , and so is the risk for false positives.<br/>
 
 To track the creation of section objects we can filter ```IRP_MJ_ACQUIRE_FOR_SECTION_SYNCHRONIZATION```, we are only interested in the creation of R/W section objects from UserMode : 
 ```cpp
@@ -619,9 +618,8 @@ If that's the case:
 
 ### Filtering paging I/O 
 Paging I/O is a term used to describe I/O initiated by either the Mm or Cc. For paging reads, it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages, the read is of course non cached as it must be satisifed from storage.<br/>
-For paging writes, it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver, much like with a paging read, to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write.<br/> 
-We know memory mapped I/O , regardless if synchronous (explicit flush) or asynchronous (mapped / modified page writer or even a lazy writer write) comes in the form of noncached paging I/O.<br/> 
-Up until now, such I/O has been indirectly filtered out as NTFS does not provide support for file object contexts in the paging I/O path. We can add the following check at the start of our pre write filter.<br/>
+For paging writes, it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver, much like with a paging read, to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write.  
+We know memory mapped I/O, regardless if synchronous (explicit flush) or asynchronous (mapped / modified page writer or even a lazy writer write) comes in the form of noncached paging I/O. Up until now, such I/O has been indirectly filtered out as NTFS does not provide support for file object contexts in the paging I/O nor we allocated contexts for requests coming from the system. Since now we have to filter paging I/O coming from the system, we can add the following check **before** the file object context probe in our pre write filter.<br/>
 ```cpp
 // not interested in writes to the paging file 
 	if (FsRtlIsPagingFile(FltObjects->FileObject))
@@ -630,8 +628,10 @@ Up until now, such I/O has been indirectly filtered out as NTFS does not provide
 
 	// if noncached paging I/O and not to the pagefile
 	if (FlagOn(Data->Iopb->IrpFlags, IRP_NOCACHE) && FlagOn(Data->Iopb->IrpFlags, IRP_PAGING_IO))
-```							
-Next , we are going to check if the file has a file context attached to it, as we are only interested in noncached paging writes to files that have been previously mapped by UM processes.<br/>
+```
+
+   
+Next, we are going to check if the file has a file context attached to it, as we are only interested in noncached paging writes to files that have been previously mapped by UM processes.<br/>
 ```cpp
 pFileContext FileContx;
 
@@ -640,7 +640,7 @@ pFileContext FileContx;
 		if (!NT_SUCCESS(status))
 			return FLT_PREOP_SUCCESS_NO_CALLBACK;
 ```
-Since the mapped page writer flush precisly takes one write, we can reliably capture both of our datapoints in pre write, as we know about the state of the file before the write and we know what is going to be written. RansomGuard simulates the write in memory as demonstrated below: 
+Since the mapped page writer flush precisly takes one write, we can reliably capture both of our datapoints at pre write. We have  the state of the file before the write and we know what is going to be written. RansomGuard simulates the write in memory as demonstrated below:  
 ```cpp
 	auto& WriteParams = Data->Iopb->Parameters.Write;
 		if (WriteParams.Length == 0)
