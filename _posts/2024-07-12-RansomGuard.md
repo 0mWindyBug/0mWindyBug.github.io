@@ -6,7 +6,7 @@ excerpt: "Anti Ransomware minifilter driver"
 ---
 
 ## Intro
-Ransomware is one of the most simple , yet significant threats facing organizations nowdays. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it. AV vendors, independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through the use of the filter manager. We also discuss the concepts and ideas that led to the design of RansomGuard, and the challenges we encountered in its implementation, some of which are not properly dealt with by certian AV solutions up until this day.
+Ransomware is one of the most simple , yet significant threats facing organizations today. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it. AV vendors, independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through the use of the filter manager. We also discuss the concepts and ideas that led to the design of RansomGuard, and the challenges we encountered in its implementation, some of which are not properly dealt with by certian AV solutions up until this day.
 RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGuard)
 
 ## Overview 
@@ -88,7 +88,7 @@ typedef struct _FLT_CONTEXT_REGISTRATION {
 The ```ContextCleanupCallback``` is called right before the context goes away ,  useful for releasing internal context resources <br/> 
 
 ## Detecting encryption {#Detecting-encryption}
-To detect encryption of data we are going to leverage [Shannon Entropy](https://en.m.wikipedia.org/wiki/Entropy_(information_theory)). We will assume the entire file is going to be encrypted, partial encryption is mentioned towards the end of the article. Anyways, two datapoints are needed - one that represents the initial state of the file and another that represents the modified state of the file. We will use the follwing measurement, which was based on statistical tests performed against a large set of files of different types. It takes into account the initial entropy of the file, limiting false positives that may arise due to high entropy file types. (e.g. archives).  
+To detect encryption of data we are going to leverage [Shannon Entropy](https://en.m.wikipedia.org/wiki/Entropy_(information_theory)). We will assume the entire file is going to be encrypted, whilst partial encryption is mentioned towards the end of the article. Two datapoints are needed - one that represents the initial state of the file and another that represents the modified state of the file. We will use the follwing measurement, which was based on statistical tests performed against a large set of files of different types. It takes into account the initial entropy of the file, limiting false positives that may arise due to high entropy file types. (e.g. archives).  
 
 ```cpp
 // statistical logic to determine encryption 
@@ -115,10 +115,10 @@ bool evaluate::IsEncrypted(double InitialEntropy, double FinalEntropy)
 Let's talk about ransomwares. When attempting to mitigate ransomware all variants of the encryption process must be considered, as it can happen very differently. 
 The most popular variation is where the files are opened in R/W, read and encrypted in place, closed and then (optionally) renamed.<br/> 
 Another option is memory mapping the files , from a ransomware prespective not only that it's faster, it is considered more evasive as the write is initiated asynchronously by the system process rather than by the ransomware process. (really anything asynchronous is harder to deal with from a defensive point of view). This trick alone was enough for Maze, LockFile and others to evade some well known security solutions.
-A third way could be creating a copy of the file with the new name, opened for W, the original file is read, its encrypted content is written inside and the original file is deleted. Whilst there are other possiblities which RansomGuard is not going to cover (check [Wrapping Up](#Wrapping-up) for disclaimers), we are going to tackle those three variants as they are (by far) the most commonly seen in ransomwares in the wild. We are going to tackle each variation seperatley as each sequence of operations requires it's own filtering logic and heuristics.
+A third way could be creating a copy of the file with the new name, opened for W, the original file is read, its encrypted content is written inside and the original file is deleted. Whilst there are other possiblities which RansomGuard is not going to cover (check [Wrapping Up](#Wrapping-up) for disclaimers), we are going to tackle those three variants as they are (by far) the most commonly seen in ransomwares in the wild. We are going to walkthrough RansomGuard's design to deal with each each variation seperatley as each sequence of operations requires it's own filtering logic and heuristics.
 
 ## Tracking & Evaluating file handles {#Tracking--Evaluating-file-handles}
-Let's start with the most obvious sequence seen in ransomwares : 
+Let's start with the most obvious sequence seen in ransomwares
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence1.png" alt="">
 
 There are a couple of things to highlight:<br/>
