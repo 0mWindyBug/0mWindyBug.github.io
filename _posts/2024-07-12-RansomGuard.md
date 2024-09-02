@@ -54,7 +54,7 @@ Putting it simply, we can use the filter manager to register callbacks to be inv
 It's important to note that easy to write does not mean easy to design,   which remains a fairly complex task with minifilters, of course - depending on the minifilter's task in hand. Nevertheless it makes it possible to go from design to a working filter in weeks rather than months, which is great. 
 
 ## Minifilter contexts 
-A context is a structure defined by a minifilter driver that can be associated with a filter manager object. The filter manager provides support for minifilter drivers to associate contexts with objects and preserve state across I/O operations.
+A context is a structure defined by a minifilter driver that can be associated with an object. The filter manager provides support for minifilter drivers to associate contexts with objects and preserve state across I/O operations.
 Contexts are extremley useful, and can be attached to the following objects : <br/>
     - Files <br/>
     - Instances <br/>
