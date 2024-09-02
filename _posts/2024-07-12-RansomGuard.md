@@ -23,7 +23,7 @@ RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGua
 * Truncated files
 * Cleanup vs Close
 * FatCheckIsOperationLegal
-* Filters implementation
+* Filters walkthrough
 * RansomGuard against WannaCry
 
 [Filtering Memory Mapped I/O](#Filtering-Memory-Mapped-IO)
