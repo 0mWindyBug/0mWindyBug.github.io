@@ -6,7 +6,7 @@ excerpt: "Anti Ransomware minifilter driver"
 ---
 
 ## Intro
-Ransomware is one of the most simple , yet significant threats facing organizations today. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it. AV vendors, independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through the use of the filter manager. We also discuss the concepts and ideas that led to the design of RansomGuard, and the challenges we encountered in its implementation. 
+Ransomware is one of the simplest, yet significant threats facing organizations today. Unsuprisingly, the rise and continuing development of ransomware led to a plentitude of research aimed at detecting and preventing it. AV vendors, independent security reseachers and academies all proposing various solutions to mitigate the threat. In this blogpost we introduce RansomGuard, a filesystem minifilter driver designed to stop ransomware from encrypting files through the use of the filter manager. We also discuss the concepts and ideas that led to the design of RansomGuard, and the challenges we encountered in its implementation. 
 RansomGuard's source can be found [here](https://github.com/0mWindyBug/RansomGuard)
 
 ## Overview 
@@ -617,7 +617,7 @@ If that's the case:
 ```
 
 ### Filtering paging I/O 
-Paging I/O is a term used to describe I/O initiated by either the Mm or Cc. For paging reads, it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages, the read is of course non cached as it must be satisifed from storage.<br/>
+Paging I/O is a term used to describe I/O initiated by either the Mm (memory manager) or Cc (cache manager) For paging reads, it means the page is being read via the demand paging mechanism, and rather than the virtual address of a buffer we are given an MDL that describes the newly allocated physical pages, the read is of course non cached as it must be satisifed from storage.<br/>
 For paging writes, it means something within the Virtual Memory System (either Mm or Cc) is requesting that data within the given physical pages will be written back to storage by the file-system driver, much like with a paging read, to flush out dirty pages the O/S builds an MDL to describe the physical pages of the mapping and sends the non-cached, paging write.  
 We know memory mapped I/O, regardless if synchronous (explicit flush) or asynchronous (mapped / modified page writer or even a lazy writer write) comes in the form of noncached paging I/O. Up until now, such I/O has been indirectly filtered out as NTFS does not provide support for file object contexts in the paging I/O nor we allocated contexts for requests coming from the system. Since now we have to filter paging I/O coming from the system, we can add the following check **before** the file object context probe in our pre write filter.<br/>
 ```cpp
