@@ -118,7 +118,7 @@ Another option is memory mapping the files , from a ransomware prespective not o
 A third way could be creating a copy of the file with the new name, opened for W, the original file is read, its encrypted content is written inside and the original file is deleted. Whilst there are other possiblities which RansomGuard is not going to cover (check [Wrapping Up](#Wrapping-up) for disclaimers), we are going to tackle those three variants as they are (by far) the most commonly seen in ransomwares in the wild. We are going to walkthrough RansomGuard's design to deal with each each variation seperatley as each sequence of operations requires it's own filtering logic and heuristics.
 
 ## Tracking & Evaluating file handles {#Tracking--Evaluating-file-handles}
-Let's start with the most obvious sequence seen in ransomwares
+To start with, we will tackle the most obvious sequence seen in ransomwares
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomSequence1.png" alt="">
 
 There are a couple of things to highlight:<br/>
