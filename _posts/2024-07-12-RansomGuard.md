@@ -166,12 +166,11 @@ Of course other file systems might allow other things, but FAT is always a good 
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
-Next , let's walkthrough each filter.<br/> 
-For the full implementation of the filters : [filters.cpp source](https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuard/RansomGuard/filters.cpp).
+Next, let's walkthrough each filter.<br/> 
+For the full implementation of the filters check out the [filters.cpp source](https://github.com/0mWindyBug/RansomGuard/blob/main/RansomGuard/RansomGuard/filters.cpp).
 
 ### PreCreate 
-The PreCreate filter is responsible to filter out any uninteresting I/O requests. For now, we are only interested in file opens for R/W , from usermode (right,we are not filtering new files... altough that's going to change later on in the blogpost).
-In addition, PreCreate serves as our only chance to capture the initial state of truncated files, if the file might get truncated, we read the file, calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.
+The PreCreate filter is responsible to filter out any uninteresting I/O requests. For now, we are only interested in file opens for R/W from UserMode. In addition, PreCreate serves as our only chance to capture the initial state of truncated files, if the file might get truncated, we read the file, calculate it's entropy, backup it's contents in memory and pass it all to PostCreate.
 Lastly, we use this filter to enforce access restrictions : <br/>
 * The restore directory should be accessible only from kernel mode.
   - The user can connect to RansomGuard's [filter port](https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/communication-between-user-mode-and-kernel-mode) and issue a control to copy the files to a user-accessible location. <br/>
