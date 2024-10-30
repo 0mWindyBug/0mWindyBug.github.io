@@ -37,6 +37,14 @@ The audio service sits between ```AudioEng.dll``` and ```AudioSes.dll``` (client
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
 
+## Expirementing with the kernel counterparts 
+Would like to cover 
+- the stack
+- IOCTL_KS_PROPERTY
+- IOCTL flow of sample application
+- callstack on break of start 
+
+
 Now that we have a basic understanding of the components involved, let's take a look at sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
 ```cpp
     hr = CoInitializeEx(NULL, COINIT_SPEED_OVER_MEMORY);
