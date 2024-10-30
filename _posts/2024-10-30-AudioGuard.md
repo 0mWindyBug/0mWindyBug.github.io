@@ -21,12 +21,11 @@ The audio architecture changed dramatically in the rewrite that was done in Vist
 As mentioned client applications eventually get down to WSAPI calls, namely through the use of the ```IAudioClient``` COM interface. ```AudioSes.dll``` is the in-process COM server that implements ```IAudioClient```. 
 
 ### UM Components - AudioEng.dll
-The audio engine (```AudioEng.dll```) is loaded by the Audio Device Graph process (```Audiodg.exe``), it's responsible for:
+The audio engine (```AudioEng.dll```) is loaded by the Audio Device Graph process (```Audiodg.exe```), it's responsible for:
 * Mixing and processing of audio streams
-* Owns the filter graph and loads APOs (Audio Processing Objects)
+* Owning the filter graph and loading APOs (Audio Processing Objects)
 
-In addition, it handles communication with the kernel-mode counterpart of the auido subsystem whenever required, through ```AudioKSE.dll```.
-It's worth mentioning the Audio Device Graph was once a protected process, but at least from Windows 10 that is not the case. 
+In addition, it handles communication with the kernel-mode counterpart of the audio subsystem whenever required, through ```AudioKSE.dll``` module. It's worth mentioning the Audio Device Graph was once a protected process, but at least from Windows 10 that is no more the case. 
 
 ### UM Components - AudioSrv.dll 
 The audio service (```AudioSrv.dll```) loads in an instance of svchost, it's responsible for:
@@ -35,7 +34,7 @@ The audio service (```AudioSrv.dll```) loads in an instance of svchost, it's res
 
 The audio service sits between ```AudioEng.dll``` and ```AudioSes.dll``` (client applications), and communicates with clients using LRPC over the following ALPC port. 
 
-<img src="{{ site.url }}{{ site.baseurl }}/images/RansomGuardDesign.png" alt="">
+<img src="{{ site.url }}{{ site.baseurl }}/images/AudioClientRpcPort.png" alt="">
 
 ## Expirementing with the kernel counterparts 
 Would like to cover 
