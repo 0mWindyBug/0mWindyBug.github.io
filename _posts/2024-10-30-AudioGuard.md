@@ -36,8 +36,13 @@ The audio service sits between ```AudioEng.dll``` and ```AudioSes.dll``` (client
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/AudioClientRpcPort.png" alt="">
 
-## Expirementing with the kernel counterparts 
-To understand better the interaction between the audio engine and t
+## The kernel side of the audio subsystem 
+To better understand the kernel interaction within the audio subsystem, I wrote a generic plug & play upper filter that logs IRPs, and installed it for the media device class:
+
+<img src="{{ site.url }}{{ site.baseurl }}/images/MedDesc.png" alt="">
+
+Despite it's misleading description, joysticks go into Human Interface Devices, and video capture devices typically go into Cameras. 
+
 Would like to cover 
 - the stack
 - IOCTL_KS_PROPERTY
