@@ -40,7 +40,8 @@ The audio service sits between ```AudioEng.dll``` and ```AudioSes.dll``` (client
 To better understand the kernel interaction within the audio subsystem, I wrote a generic plug & play upper filter that logs IRPs, and installed it for the media device class:
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/MedDesc.png" alt="">
-> [!NOTE]
+
+> **Note**
 Despite it's misleading description, joysticks go into Human Interface Devices, and video capture devices typically go into Cameras. 
 
 Would like to cover 
