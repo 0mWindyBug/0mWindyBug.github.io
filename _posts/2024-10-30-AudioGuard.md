@@ -45,9 +45,8 @@ To better understand the kernel interaction within the audio subsystem, I wrote 
 
 Upon restarting the system and running a sample audio capture application, we can examine our driver's output. 
 
-> I will not paste the entire log here, as there are actually hundereds of IOCTLs in play, most of them related to audio format negotiation (adjust per tim osr thread)
-
-> After some reserach, these are the requests I found to be worth mentioning
+> I will not paste the entire log here, as there are actually hundereds of IOCTLs in play, most of them related to audio format negotiation (adjust per tim osr thread) \n
+> Nevertheless, after some reserach - these are the requests I found to be worth mentioning
 
 ```yaml
 IRP_MJ_CREATE -> ...\.e.m.i.c.i.n.w.a.v.e.
