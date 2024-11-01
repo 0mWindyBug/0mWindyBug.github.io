@@ -46,36 +46,39 @@ To better understand the kernel interaction within the audio subsystem, I wrote 
 Upon restarting the system and running a sample audio capture application, we can examine our driver's output. 
 -> I will not paste the entire log here, as there are actually hundereds of IOCTLs in play, most of them related to audio format negotiation (adjust per tim osr thread) 
 > After some reserach, these are the requests I found to be worth mentioning
+
 ```yaml
-IRP_MJ_CREATE triggered by KsOpenDefaultDevice call
-	-> ...\.e.m.i.c.i.n.w.a.v.e. 
+IRP_MJ_CREATE -> ...\.e.m.i.c.i.n.w.a.v.e.
+* Corresponding to a KsOpenDefaultDevice call
 
-IOCTL_KS_PROPERTY 
-	-> KSPROPERTY_PIN
+IOCTL_KS_PROPERTY -> KSPROPERTY_PIN 
 
-IRP_MJ_CREATE for the pin 
-	-> <KSNAME_Pin><KSPIN_CONNECT><KSDATAFORMAT> 
+IRP_MJ_CREATE -> <KSNAME_Pin><KSPIN_CONNECT><KSDATAFORMAT> 
 
-IOCTL_KS_PROPERTY
-	-> KSPROPERTY_CONNECTION_STATE
-		-> KSSTATE_ACQUIRE
+IOCTL_KS_PROPERTY -> KSPROPERTY_CONNECTION_STATE -> KSSTATE_ACQUIRE (Set)
 
-IOCTL_KS_PROPERTY
-	-> KSPROPERTY_CONNECTION_STATE
-		set -> KSSTATE_PAUSE
+IOCTL_KS_PROPERTY -> KSPROPERTY_CONNECTION_STATE -> KSSTATE_PAUSE (Set)
 
-IOCTL_KS_PROPERTY
-	-> KSPROPERTY_CONNECTION_STATE
-		set -> KSSTATE_RUN
+IOCTL_KS_PROPERTY -> KSPROPERTY_CONNECTION_STATE -> KSSTATE_RUN (Set)
+***
+Recording Starts
+***
 
-IOCTL_KS_PROPERTY
-	-> KSPROPERTY_CONNECTION_STATE
-		-> KSSTATE_ACQUIRE
+...
 
-IOCTL_KS_PROPERTY
-	-> KSPROPERTY_CONNECTION_STATE
-		set -> KSSTATE_STOP
+***
+Recording Ends
+***
+
+IOCTL_KS_PROPERTY -> KSPROPERTY_CONNECTION_STATE -> KSSTATE_ACQUIRE (Set)
+
+IOCTL_KS_PROPERTY -> KSPROPERTY_CONNECTION_STATE -> KSSTATE_STOP (Set)
 ```
+As expected, those IRPs are being generated from the audio engine (through ```AudioKSE.dll```) in the audiodg process.
+
+## IRP_MJ_CREATE for KSPIN 
+
+## IOCTL_KS_PROPERTY 
 
 Would like to cover 
 - the stack
