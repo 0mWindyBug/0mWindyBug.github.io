@@ -41,9 +41,41 @@ To better understand the kernel interaction within the audio subsystem, I wrote 
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/MedDesc.png" alt="">
 
-> **Note**
 > Despite it's misleading description, joysticks go into Human Interface Devices, and video capture devices typically go into Cameras. 
 
+Upon restarting the system and running a sample audio capture application, we can examine our driver's output. 
+-> I will not paste the entire log here, as there are actually hundereds of IOCTLs in play, most of them related to audio format negotiation (adjust per tim osr thread) 
+> After some reserach, these are the requests I found to be worth mentioning
+```yaml
+IRP_MJ_CREATE triggered by KsOpenDefaultDevice call
+	-> ...\.e.m.i.c.i.n.w.a.v.e. 
+
+IOCTL_KS_PROPERTY 
+	-> KSPROPERTY_PIN
+
+IRP_MJ_CREATE for the pin 
+	-> <KSNAME_Pin><KSPIN_CONNECT><KSDATAFORMAT> 
+
+IOCTL_KS_PROPERTY
+	-> KSPROPERTY_CONNECTION_STATE
+		-> KSSTATE_ACQUIRE
+
+IOCTL_KS_PROPERTY
+	-> KSPROPERTY_CONNECTION_STATE
+		set -> KSSTATE_PAUSE
+
+IOCTL_KS_PROPERTY
+	-> KSPROPERTY_CONNECTION_STATE
+		set -> KSSTATE_RUN
+
+IOCTL_KS_PROPERTY
+	-> KSPROPERTY_CONNECTION_STATE
+		-> KSSTATE_ACQUIRE
+
+IOCTL_KS_PROPERTY
+	-> KSPROPERTY_CONNECTION_STATE
+		set -> KSSTATE_STOP
+```
 
 Would like to cover 
 - the stack
