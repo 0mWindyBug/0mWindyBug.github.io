@@ -42,8 +42,7 @@ To better understand the kernel interaction within the audio subsystem, I wrote 
 <img src="{{ site.url }}{{ site.baseurl }}/images/MedDesc.png" alt="">
 
 > **Note**
-
-Despite it's misleading description, joysticks go into Human Interface Devices, and video capture devices typically go into Cameras. 
+> Despite it's misleading description, joysticks go into Human Interface Devices, and video capture devices typically go into Cameras. 
 
 
 Would like to cover 
