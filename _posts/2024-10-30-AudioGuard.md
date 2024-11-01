@@ -75,6 +75,10 @@ IOCTL_KS_PROPERTY -> KSPROPERTY_CONNECTION_STATE -> KSSTATE_ACQUIRE (Set)
 IOCTL_KS_PROPERTY -> KSPROPERTY_CONNECTION_STATE -> KSSTATE_STOP (Set)
 ```
 As expected, those IRPs are being generated from the audio engine (through ```AudioKSE.dll```) in the audiodg process.
+<img src="{{ site.url }}{{ site.baseurl }}/images/AudioKSEStack.png" alt="">
+
+<img src="{{ site.url }}{{ site.baseurl }}/images/AudioKSE_Process.png" alt="">
+
 
 ## IRP_MJ_CREATE for KSPIN 
 
