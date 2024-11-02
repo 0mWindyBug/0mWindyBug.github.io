@@ -89,7 +89,7 @@ Upon obtaining a handle to a ```KSFILTER``` object (e.g. via a ```KsOpenDefualtD
 ```IOCTL_KS_PROPERTY``` is used to get or set properties, or to determine the properties supported by a KS object. The format of an ```IOCTL_KS_PROPERTY``` request is as follows: 
 ```mermaid
 graph TD;
-    InputBuffer-->PKSIDENTIFIR;
+    InputBuffer-->PKSIDENTIFIER;
     PKSIDENTIFIER-->Set;
    .PKSIDENTIFIER-->Id;
 ```
