@@ -6,7 +6,7 @@ excerpt: "controlling microphone access on per-process basis"
 ---
 
 ## Intro
-Long-term surveillance hinges critically on microphone capture and recording capabilities, serving as a cornerstone of persistent monitoring operations, whether state-sponsored or not. Threat actors can silently harvest sensitive intelligence from team meetings, voice chats, and  internal discussions as long as the endpoint has a microphone device connected to it, providing access to organizational insights. In this blogpost, our goal is to dive into the audio capturing internals on Windows, and to design a protection solution that will prompt the user whenever a process is try to capture microphone input with the name of the said process, and allow the user to block or permit the access.
+Long-term surveillance hinges critically on microphone capture and recording capabilities, serving as a cornerstone of persistent monitoring operations, whether state-sponsored or not. Threat actors can silently harvest sensitive intelligence from team meetings, voice chats, and  internal discussions as long as the endpoint has a microphone device connected to it, providing access to organizational insights. In this blogpost, our goal is to uncover the internals behind the audio subsystem on Windows, and design a protection solution that will prompt the user whenever a process is attempting to capture microphone input, allowing them to permit or deny the access.  
 
 ## Some KS terminology 
 Whenever we open our webcam, activate our microphone or enable sound. The system needs to read or write related data such as your voice or captured images into RAM. Kernel Streaming (KS) refers to the Microsoft-provided services that support kernel-mode processing of streamed data.  KS serves as a standardized interface for multimedia devices, and aims to provide low latency and simplified multimedia driver development. Microsoft provides three multimedia class driver models: port class, stream class, and AVStream. These class drivers are implemented as export drivers (kernel-mode DLLs) in the system files portcls.sys, stream.sys, and ks.sys. the ```portcls.sys``` driver is what most hardware drivers for PCI and DMA-based audio devices based on. the port clsss driver supplies a set of port drivers that implement most of the generic kernel streaming (KS) filter functionality, it's essentially another abstraction on top of ```ks.sys``` making the job of driver devs easier.
@@ -83,9 +83,19 @@ As expected, those IRPs are being generated from the audio engine (through ```Au
 
 
 ## IRP_MJ_CREATE for KSPIN 
-Upon obtaining a handle to a ```KSFILTER``` object (e.g. via a ```KsOpenDefualtDevice``` call), the audio engine initiates another create operation targeted at one of the filter's pins. Bizarrely, as disovered by [Michael Maltsev](https://x.com/m417z) in his camera stack focused research, the file name in the ```IRP_MJ_CREATE```operation for the pin begins with the ```KSNAME_Pin``` GUID and is followed by a [KSPIN_CONNECT](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ks/ns-ks-kspin_connect) structure that contains the pin id, and a binary [KSDATAFORMAT](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ks/ns-ks-ksdataformat) structure that defines the format to be used. More about the avaliable audio formats [here](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-data-formats).
+Upon obtaining a handle to a ```KSFILTER``` object (e.g. via a ```KsOpenDefualtDevice``` call), the audio engine initiates another create operation targeted at one of the filter's pins. Bizarrely, as disovered by [Michael Maltsev](https://x.com/m417z) in his camera stack focused research, the file name in the ```IRP_MJ_CREATE``` operation for the pin begins with the ```KSNAME_Pin``` GUID and is followed by a [KSPIN_CONNECT](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ks/ns-ks-kspin_connect) structure that contains the pin id, and a binary [KSDATAFORMAT](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ks/ns-ks-ksdataformat) structure that defines the format to be used. More about the avaliable audio formats [here](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-data-formats).
 
 ## IOCTL_KS_PROPERTY 
+```IOCTL_KS_PROPERTY``` is used to get or set properties, or to determine the properties supported by a KS object. The format of an ```IOCTL_KS_PROPERTY``` request is as follows: 
+```mermaid
+graph TD;
+    InputBuffer-->PKSIDENTIFIR;
+    PKSIDENTIFIER-->Set;
+   .PKSIDENTIFIER-->Id;
+```
+
+
+As with most KS IOCTLs, ```IOCTL_KS_PROPERTY``` is ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
 
 Would like to cover 
 - the stack
