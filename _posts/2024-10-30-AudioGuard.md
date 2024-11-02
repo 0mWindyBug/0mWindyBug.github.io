@@ -91,7 +91,7 @@ Upon obtaining a handle to a ```KSFILTER``` object (e.g. via a ```KsOpenDefualtD
 graph TD;
     InputBuffer-->PKSIDENTIFIER;
     PKSIDENTIFIER-->Set;
-   .PKSIDENTIFIER-->Id;
+    PKSIDENTIFIER-->Id;
 ```
 
 
