@@ -94,8 +94,10 @@ graph TD;
     PKSIDENTIFIER-->Id;
 ```
 
-*  ```PKSIDENTIFIER->Set``` points to a [property set]()
+*  ```PKSIDENTIFIER->Set``` points to a [property set](https://learn.microsoft.com/en-us/windows-hardware/drivers/stream/avstream-property-sets)
 *  ```PKSIDENTIFIER->Id``` points to the specific property within the specefied property set
+
+In both get and set ```IOCTL_KS_PROPERTY``` requests, the property value (to get or set) is passed through the output buffer.
 
 
 
