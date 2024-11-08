@@ -107,7 +107,7 @@ insert example snippet here
 
 
 
-As with most KS IOCTLs, ```IOCTL_KS_PROPERTY``` is ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
+It's crucial to note that as with most KS IOCTLs, ```IOCTL_KS_PROPERTY``` is ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
 
 Would like to cover 
 - the stack
