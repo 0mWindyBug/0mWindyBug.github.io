@@ -86,7 +86,7 @@ As expected, those IRPs are being generated from the audio engine (through ```Au
 Upon obtaining a handle to a ```KSFILTER``` object (e.g. via a ```KsOpenDefualtDevice``` call), the audio engine initiates another create operation targeted at one of the filter's pins. Bizarrely, as disovered by [Michael Maltsev](https://x.com/m417z) in his camera stack focused research, the file name in the ```IRP_MJ_CREATE``` operation for the pin begins with the ```KSNAME_Pin``` GUID and is followed by a [KSPIN_CONNECT](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ks/ns-ks-kspin_connect) structure that contains the pin id, and a binary [KSDATAFORMAT](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ks/ns-ks-ksdataformat) structure that defines the format to be used. More about the avaliable audio formats [here](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-data-formats).
 
 ## IOCTL_KS_PROPERTY 
-```IOCTL_KS_PROPERTY``` is used to get or set properties, or to determine the properties supported by a KS object. The format of an ```IOCTL_KS_PROPERTY``` request is as follows: 
+```IOCTL_KS_PROPERTY``` is used to get or set properties, or to determine the properties supported by a KS object. The format of an ```IOCTL_KS_PROPERTY``` request conssists of a property descriptor, passed in the input buffer, and a property value - passed over the output buffer. The type of the descriptor is mostly  
 ```mermaid
 graph TD;
     InputBuffer-->PKSIDENTIFIER;
@@ -97,8 +97,13 @@ graph TD;
 *  ```PKSIDENTIFIER->Set``` points to a [property set](https://learn.microsoft.com/en-us/windows-hardware/drivers/stream/avstream-property-sets)
 *  ```PKSIDENTIFIER->Id``` points to the specific property within the specefied property set
 
-In both get and set ```IOCTL_KS_PROPERTY``` requests, the property value (to get or set) is passed through the output buffer.
+Of course, the type of the property value varies and depends on the property. 
 
+the property descriptor and value types are often documentd with a usage summary table in the MSDN page for the property
+
+insert example snippet here
+
+> KSPROPERTY and KSIDENTIFIER are aliases, and have the same definition.
 
 
 
