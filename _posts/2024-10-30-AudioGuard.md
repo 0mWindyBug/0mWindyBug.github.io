@@ -94,6 +94,11 @@ graph TD;
     PKSIDENTIFIER-->Id;
 ```
 
+*  ```PKSIDENTIFIER->Set``` points to a [property set]()
+*  ```PKSIDENTIFIER->Id``` points to the specific property within the specefied property set
+
+
+
 
 As with most KS IOCTLs, ```IOCTL_KS_PROPERTY``` is ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
 
