@@ -99,15 +99,14 @@ graph TD;
 
 Of course, the type of the property value varies and depends on the property. 
 
-the property descriptor and value types are often documentd with a usage summary table in the MSDN page for the property
-
-insert example snippet here
+the property descriptor and value types are often documentd with a usage summary table in the MSDN page for the property. As indicated by our driver's log, ```KSPROPERTY_CONNECTION_STATE -> KSSTATE_RUN``` property is being set to start the recording, and ```KSPROPERTY_CONNECTION_STATE -> KSSTATE_STOP``` property is being set to stop it. 
+insert example snippet here msdn
 
 > KSPROPERTY and KSIDENTIFIER are aliases, and have the same definition.
 
-
-
 As with all KS IOCTLs, ```IOCTL_KS_PROPERTY``` is defined as ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
+
+## Ksthunk
 
 Would like to cover 
 - the stack
