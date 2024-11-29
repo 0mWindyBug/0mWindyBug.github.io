@@ -103,12 +103,12 @@ the property descriptor and value types are often documented via a usage summary
 <img src="{{ site.url }}{{ site.baseurl }}/images/UsageTable.png" alt="">
 > KSPROPERTY and KSIDENTIFIER are aliases, and have the same definition.
 
-As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPROPERTY_CONNECTION_STATE``` property set is set to start a recording. On the other hand, to stop the recording one would have to set ```KSSTATE_STOP```
+As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPROPERTY_CONNECTION_STATE``` property set is set to start a recording. On the other hand, to stop the recording one would have to set ```KSSTATE_STOP```z
 
 Lastly, as with all KS IOCTLs, ```IOCTL_KS_PROPERTY``` is defined as ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
 
 ## Blocking microphone access 
-AVs allow the user to conifgure the type of protection to apply on the microphone, usually under the AV privacy protection.
+AVs allow the user to conifgure the type of protection applied on the microphone, this configuration tends to be under the privacy protection settings.
 Let's start by implementing the most robust configuration - blocking any attempt to record our microphone.
 A straightforward approach is to simply block incoming ```IOCTL_KS_PROPERTY``` IRPs setting the ```KSSTATE_RUN``` property of the ```KSPROPERTY_CONNECTION_STATE``` property set. However, to be able to support other configuration options in the future, a better design would be to notify a UM service whenever such request occurs (using the [inverted call model](https://www.osronline.com/article.cfm%5Eid=94.htm#:~:text=Driver%20writers%20often%20ask%20whether%20or%20not%20a,that%20can%20be%20used%20to%20achieve%20similar%20functionality.), place the IRP in a [cancel safe queue](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/cancel-safe-irp-queues), wait for a response from the service (indicating the way the driver should handle the request), extract it from the queue and complete it accordingly.  
 ```cpp
