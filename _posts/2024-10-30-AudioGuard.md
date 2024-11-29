@@ -99,7 +99,7 @@ graph TD;
 
 Of course, the type of the property value varies and depends on the property. 
 
-the property descriptor and value types are often documentd with a usage summary table in the MSDN page for the property. As indicated by our driver's log, ```KSPROPERTY_CONNECTION_STATE -> KSSTATE_RUN``` property is being set to start the recording, and ```KSPROPERTY_CONNECTION_STATE -> KSSTATE_STOP``` property is being set to stop it. 
+the property descriptor and value types are often documented via a usage summary table in the MSDN page for the property. As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPROPERTY_CONNECTION_STATE``` property set is set to start a recording. On the other hand, to stop the recording one would have to set ```KSSTATE_STOP```
 insert example snippet here msdn
 
 > KSPROPERTY and KSIDENTIFIER are aliases, and have the same definition.
