@@ -45,7 +45,7 @@ To better understand the kernel interaction within the audio subsystem, I wrote 
 
 Upon restarting the system and running a sample audio capture application, we can examine our driver's output. 
 
-> I will not paste the entire log here, as there are actually hundereds of IOCTLs in play, most of them related to audio format negotiation (adjust per tim osr thread)
+> There are hundereds of IOCTLs in play, most of them related to audio format negotiation (adjust per tim osr thread)
 > 
 > Nevertheless, after some reserach - these are the requests I found to be worth mentioning
 
@@ -99,10 +99,13 @@ graph TD;
 
 Of course, the type of the property value varies and depends on the property. 
 
-the property descriptor and value types are often documented via a usage summary table in the MSDN page for the property. As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPROPERTY_CONNECTION_STATE``` property set is set to start a recording. On the other hand, to stop the recording one would have to set ```KSSTATE_STOP```
-insert example snippet here msdn
-
+the property descriptor and value types are often documented via a usage summary table in the MSDN page for the property.
+<img src="{{ site.url }}{{ site.baseurl }}/images/UsageTable.png" alt="">
 > KSPROPERTY and KSIDENTIFIER are aliases, and have the same definition.
+
+As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPROPERTY_CONNECTION_STATE``` property set is set to start a recording. On the other hand, to stop the recording one would have to set ```KSSTATE_STOP```
+
+
 
 As with all KS IOCTLs, ```IOCTL_KS_PROPERTY``` is defined as ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
 
