@@ -105,19 +105,161 @@ the property descriptor and value types are often documented via a usage summary
 
 As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPROPERTY_CONNECTION_STATE``` property set is set to start a recording. On the other hand, to stop the recording one would have to set ```KSSTATE_STOP```
 
+Lastly, as with all KS IOCTLs, ```IOCTL_KS_PROPERTY``` is defined as ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
+
+## Blocking microphone access 
+AVs allow the user to conifgure the type of protection to apply on the microphone, usually under the AV privacy protection.
+Let's start by implementing the most robust configuration - blocking any attempt to record our microphone.
+A straightforward approach is to simply block incoming ```IOCTL_KS_PROPERTY``` IRPs setting the ```KSSTATE_RUN``` property of the ```KSPROPERTY_CONNECTION_STATE``` property set. However, to be able to support other configuration options in the future, a better design would be to notify a UM service whenever such request occurs (using the [inverted call model](https://www.osronline.com/article.cfm%5Eid=94.htm#:~:text=Driver%20writers%20often%20ask%20whether%20or%20not%20a,that%20can%20be%20used%20to%20achieve%20similar%20functionality.), place the IRP in a [cancel safe queue](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/cancel-safe-irp-queues), wait for a response from the service (indicating the way the driver should handle the request), extract it from the queue and complete it accordingly.  
+```cpp
+bool filter::KsPropertyHandler(PDEVICE_OBJECT DeviceObject, PIRP Irp, PIO_STACK_LOCATION IoStackLocation)
+{
+    GUID PropertysetConnection = GUID_PROPSETID_Connection;
+    ULONG OutputBufferLength = IoStackLocation->Parameters.DeviceIoControl.OutputBufferLength;
+    ULONG InputBufferLength = IoStackLocation->Parameters.DeviceIoControl.InputBufferLength;
+
+    if (!InputBufferLength || !OutputBufferLength)
+        return AUDGUARD_COMPLETE;
+
+    PVOID InputBuffer = IoStackLocation->Parameters.DeviceIoControl.Type3InputBuffer;
+    PVOID OutputBuffer = Irp->UserBuffer;
+
+    // IOCTL_KS_PROPERTY is method neither, we are provided with the user addresses as is  
+    // since AudioGuard is attached at the top of the stack we can access these buffers directly 
+    // must be done in a try except as the buffer might get freed any time by the user thread 
+
+    __try
+    {
+
+        ProbeForRead(InputBuffer, InputBufferLength, sizeof(UCHAR));
+
+        PKSIDENTIFIER KsIdentifier = reinterpret_cast<PKSIDENTIFIER>(InputBuffer);
+
+        if (IsEqualGUID(KsIdentifier->Set, PropertysetConnection))
+        {
+
+            if (KsIdentifier->Id == KSPROPERTY_CONNECTION_STATE && KsIdentifier->Flags == KSPROPERTY_TYPE_SET)
+            {
+                KSSTATE KsStatePtr = *reinterpret_cast<PKSSTATE>(OutputBuffer);
+
+                switch (KsStatePtr)
+                {
+                case KSSTATE_STOP:
+                    DbgPrint("[*] AudioGuard :: request to set KSSTATE_STOP\n");
+                    break;
+
+                case KSSTATE_ACQUIRE:
+                    DbgPrint("[*] AudioGuard :: request to set KSSTATE_ACQUIRE\n");
+                    break;
+
+                case KSSTATE_PAUSE:
+                    DbgPrint("[*] AudioGuard :: request to set KSSTATE_PAUSE\n");
+                    break;
+
+                    // sent on capture start!
+                    // handle it by placing the IRP in an IRP queue and prompt the user asynchronously 
+                    // since we are not going to touch the buffers anymore we don't have to map them
+                    // in case the user allows processing to proceed we will call IofCallDriver in an apc, allowing ksthunk to map these user addresses
+
+                case KSSTATE_RUN:
+                    DbgPrint("[*] AudioGuard :: request to set KSSTATE_RUN\n");
+
+                    // notify service of KS request
+                    pCsqIrpQueue ClientIrpQueue = reinterpret_cast<pCsqIrpQueue>(globals::ClientDeviceObject->DeviceExtension);
+                    PIRP ClientIrp = IoCsqRemoveNextIrp(&ClientIrpQueue->CsqObject, nullptr);
+                    if (!ClientIrp)
+                    {
+                        return AUDGUARD_COMPLETE;
+                    }
 
 
-As with all KS IOCTLs, ```IOCTL_KS_PROPERTY``` is defined as ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
+                    Irp->Tail.Overlay.DriverContext[0] = DeviceObject;
 
-## Ksthunk
+                    // IOCsqInsertIrp marks the IRP as pending 
+                    IoCsqInsertIrp(&globals::g_pKsPropertyQueue->CsqObject, Irp, nullptr);
 
-Would like to cover 
-- the stack
-- IOCTL_KS_PROPERTY
-- IOCTL flow of sample application
-- callstack on break of start 
+                    ClientIrp->IoStatus.Status = STATUS_SUCCESS;
+                    ClientIrp->IoStatus.Information = 0;
+                    IoCompleteRequest(ClientIrp, IO_NO_INCREMENT);
+
+                    return AUDGUARD_PEND;
+                }
+
+            }
+        }
+
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        DbgPrint("[*] AudioGuard :: exception accessing buffer in ksproperty handler\n");
+    }
+
+    return AUDGUARD_COMPLETE;
+}
+```
+And to handle the response from the service:
+```cpp
+NTSTATUS client::device_control(PDEVICE_OBJECT DeviceObject, PIRP Irp)
+{
+...
+	case IOCTL_AUDGUARD_USER_DIALOG:
+
+		KsIrp = IoCsqRemoveNextIrp(&globals::g_pKsPropertyQueue->CsqObject, nullptr);
+		if (!KsIrp)
+			break;
+
+		ProtectionServiceConfig = *reinterpret_cast<int*>(Irp->AssociatedIrp.SystemBuffer);
+
+		// complete the previously pended IOCTL_KS_PROPERTY 
+		// we have to do it from the caller's context since ksthunk (below us) will try to map user addresses
+		if (apc::queue_completion_kernel_apc(KsIrp, ProtectionServiceConfig))
+			status = STATUS_SUCCESS;
+...
+}
+```
+
+## Completion thread context 
+KS IOCTLs are ```METHOD_NEITHER```, remember? Once we decide to pend a KS IOCTL, we have to ensure we don't complete it in an arbitrary thread context. Drivers below us will try to map and access the provided user buffers, which are valid only in the caller's context.  
+The solution? Queueing a completion APC to the caller thread, of course!
+```cpp
+
+void apc::normal_routine(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemArgument2)
+{
+	UNREFERENCED_PARAMETER(SystemArgument1);
+	UNREFERENCED_PARAMETER(SystemArgument2);
+
+	pApcContext ApcContx = reinterpret_cast<pApcContext>(NormalContext);
+	PDEVICE_OBJECT FilterDeviceObject = reinterpret_cast<PDEVICE_OBJECT>(ApcContx->Irp->Tail.Overlay.DriverContext[0]);
+	filter::pDeviceExtension DevExt = reinterpret_cast<filter::pDeviceExtension>(FilterDeviceObject->DeviceExtension);
+
+	int ProtectionServiceConfig = ApcContx->ProtectionServiceConfig;
+
+	// if service is configured to block all access complete with status denied  
+	if (ProtectionServiceConfig == AUDGUARD_BLOCK_MIC_ACCESS)
+	{
+		DbgPrint("[*] AudioGuard :: completing IOCTL_KS_PROPERTY IRP with access denied!\n");
+		ApcContx->Irp->IoStatus.Status = STATUS_ACCESS_DENIED;
+		ApcContx->Irp->IoStatus.Information = 0;
+		IofCompleteRequest(ApcContx->Irp, IO_NO_INCREMENT);
+	}
+
+	// otherwise pass the request down 
+	else
+	{
+		DbgPrint("[*] AudioGuard :: passing IOCTL_KS_PROPERTY IRP down the audio stack!\n");
+		IoSkipCurrentIrpStackLocation(ApcContx->Irp);
+		IofCallDriver(DevExt->LowerDeviceObject, ApcContx->Irp);
+	}
+
+	IoReleaseRemoveLock(&DevExt->RemoveLock, ApcContx->Irp);
+	ExFreePoolWithTag(ApcContx, TAG);
+
+}
+```
 
 
+
+## How it works together 
 Now that we have a basic understanding of the components involved, let's take a look at sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
 ```cpp
     hr = CoInitializeEx(NULL, COINIT_SPEED_OVER_MEMORY);
@@ -218,7 +360,9 @@ Now that we have a basic understanding of the components involved, let's take a 
     outFile.write(reinterpret_cast<char*>(&waveHeader), sizeof(waveHeader));
 ```
 
-the method of interest is ```pAudioClient->Start()```, which as the name suggests - starts the audio capture by streaming data between the endpoint buffer and the audio engine.
+the method of interest is ```pAudioClient->Start()```, which as the name suggests - starts the audio capture by streaming data between the endpoint buffer and the audio engine, and essentially starts the audio recording. 
+
+#### Tracing AudioClient->Start 
 
 
 
