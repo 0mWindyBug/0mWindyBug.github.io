@@ -81,6 +81,10 @@ As expected, those IRPs are being generated from the audio engine (through ```Au
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/AudioKSE_Process.png" alt="">
 
+## And what about the device stack?
+insert windbg stack here
+compare to diagram from other blogpost
+mention portcls and ks
 
 ## IRP_MJ_CREATE for KSPIN 
 Upon obtaining a handle to a ```KSFILTER``` object (e.g. via a ```KsOpenDefualtDevice``` call), the audio engine initiates another create operation targeted at one of the filter's pins. Bizarrely, as disovered by [Michael Maltsev](https://x.com/m417z) in his camera stack focused research, the file name in the ```IRP_MJ_CREATE``` operation for the pin begins with the ```KSNAME_Pin``` GUID and is followed by a [KSPIN_CONNECT](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ks/ns-ks-kspin_connect) structure that contains the pin id, and a binary [KSDATAFORMAT](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ks/ns-ks-ksdataformat) structure that defines the format to be used. More about the avaliable audio formats [here](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-data-formats).
@@ -103,9 +107,9 @@ the property descriptor and value types are often documented via a usage summary
 <img src="{{ site.url }}{{ site.baseurl }}/images/UsageTable.png" alt="">
 > KSPROPERTY and KSIDENTIFIER are aliases, and have the same definition.
 
-As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPROPERTY_CONNECTION_STATE``` property set is set to start a recording. On the other hand, to stop the recording one would have to set ```KSSTATE_STOP```z
+As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPROPERTY_CONNECTION_STATE``` property set is set to start a recording. On the other hand, to stop the recording one would have to set ```KSSTATE_STOP```.
 
-Lastly, as with all KS IOCTLs, ```IOCTL_KS_PROPERTY``` is defined as ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
+As with all KS IOCTLs, ```IOCTL_KS_PROPERTY``` is defined as ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
 
 ## Blocking microphone access 
 AVs allow the user to conifgure the type of protection applied on the microphone, this configuration tends to be under the privacy protection settings.
@@ -218,9 +222,9 @@ NTSTATUS client::device_control(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 }
 ```
 
-## Completion thread context 
-KS IOCTLs are ```METHOD_NEITHER```, remember? Once we decide to pend a KS IOCTL, we have to ensure we don't complete it in an arbitrary thread context. Drivers below us will try to map and access the provided user buffers, which are valid only in the caller's context.  
-The solution? Queueing a completion APC to the caller thread, of course!
+## Completion thread context
+KS IOCTLs are ```METHOD_NEITHER```, remember? Once we decide to pend a KS IOCTL, we have to ensure we don't complete it in an arbitrary thread context. ksthunk, the driver below us in the stack, will try to map and access the provided user buffers, which are valid only in the caller's context.  
+The solution? queueing a completion APC to the caller thread, of course!
 ```cpp
 
 void apc::normal_routine(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemArgument2)
@@ -259,8 +263,8 @@ void apc::normal_routine(PVOID NormalContext, PVOID SystemArgument1, PVOID Syste
 
 
 
-## How it works together 
-Now that we have a basic understanding of the components involved, let's take a look at sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
+## How it all works together 
+Now that we are familiar with th components involved, let's take a look at sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
 ```cpp
     hr = CoInitializeEx(NULL, COINIT_SPEED_OVER_MEMORY);
     EXIT_ON_ERROR(hr)
@@ -360,7 +364,7 @@ Now that we have a basic understanding of the components involved, let's take a 
     outFile.write(reinterpret_cast<char*>(&waveHeader), sizeof(waveHeader));
 ```
 
-the method of interest is ```pAudioClient->Start()```, which as the name suggests - starts the audio capture by streaming data between the endpoint buffer and the audio engine, and essentially starts the audio recording. 
+the method of interest is ```pAudioClient->Start()```, which as the name suggests - starts the audio recording by streaming data between the endpoint buffer and the audio engine, and essentially starts the audio recording. 
 
 #### Tracing AudioClient->Start 
 
