@@ -257,7 +257,7 @@ void apc::normal_routine(PVOID NormalContext, PVOID SystemArgument1, PVOID Syste
 ```
 
 ## Diving deeper  
-There's still more work to be done, since the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` is sent from the audio engine, we need to find another way to identify the audio recording process. Let's summeraize what we know so far: 
+There's still more work to be done, since the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` is sent from the audio engine, we need to find another way to identify the audio recording process. Let's take a closer look at the subsystem's components, with our driver involved: 
 <img src="{{ site.url }}{{ site.baseurl }}/images/AudioGuardFlow.png" alt="">
 
  let's take a look at sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
