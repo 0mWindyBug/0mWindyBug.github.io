@@ -256,10 +256,11 @@ void apc::normal_routine(PVOID NormalContext, PVOID SystemArgument1, PVOID Syste
 }
 ```
 
+## Diving deeper  
+There's still more work to be done, since the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` is sent from the audio engine, we need to find another way to identify the audio recording process. Let's summeraize what we know so far: 
+<img src="{{ site.url }}{{ site.baseurl }}/images/AudioGuardFlow.png" alt="">
 
-
-## How it all works together 
-Now that we are familiar with th components involved, let's take a look at sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
+ let's take a look at sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
 ```cpp
     hr = CoInitializeEx(NULL, COINIT_SPEED_OVER_MEMORY);
     EXIT_ON_ERROR(hr)
