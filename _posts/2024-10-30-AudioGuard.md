@@ -48,7 +48,7 @@ Typically, the audio stack will be constructed from devices managed by ```ksthun
 
 Upon restarting the system and running a sample audio recording application, we can examine our driver's output. 
 
-> There are hundereds of IOCTLs in play, most of them related to audio format negotiation (adjust per tim osr thread)
+> There are hundereds of IOCTLs in play, most of them related to [audio format negotiation](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-data-formats)
 > 
 > Nevertheless, after some reserach - these are the requests I found to be worth mentioning
 
