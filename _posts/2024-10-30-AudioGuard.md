@@ -41,9 +41,12 @@ To better understand the kernel interaction within the audio subsystem, I wrote 
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/MedDesc.png" alt="">
 
-> Despite it's misleading description, joysticks go into Human Interface Devices, and video capture devices typically go into Cameras. 
+> Despite it's misleading description, joysticks go into Human Interface Devices, and video capture devices typically go into Cameras.
 
-Upon restarting the system and running a sample audio capture application, we can examine our driver's output. 
+Typically, the audio stack will be constructed from devices managed by ```ksthunk.sys```, ```HdAudio.sys``` and ```HdAudBus.sys```:
+<img src="{{ site.url }}{{ site.baseurl }}/images/audio_devstack.png" alt="">
+
+Upon restarting the system and running a sample audio recording application, we can examine our driver's output. 
 
 > There are hundereds of IOCTLs in play, most of them related to audio format negotiation (adjust per tim osr thread)
 > 
@@ -81,7 +84,7 @@ As expected, those IRPs are being generated from the audio engine (through ```Au
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/AudioKSE_Process.png" alt="">
 
-## And what about the device stack?
+
 insert windbg stack here
 compare to diagram from other blogpost
 mention portcls and ks
