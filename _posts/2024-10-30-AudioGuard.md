@@ -94,9 +94,8 @@ Upon obtaining a handle to a ```KSFILTER``` object (e.g. via a ```KsOpenDefualtD
 
 ## IOCTL_KS_PROPERTY 
 ```IOCTL_KS_PROPERTY``` is used to get or set properties, or to determine the properties supported by a KS object. The format of an ```IOCTL_KS_PROPERTY``` request conssists of a property descriptor, passed in the input buffer, and a property value - passed over the output buffer. The type of the descriptor is mostly  
-```mermaid
-<img src="{{ site.url }}{{ site.baseurl }}/images/KsDescFormat.png" alt="">
 
+<img src="{{ site.url }}{{ site.baseurl }}/images/KsDescFormat.png" alt="">
 *  ```PKSIDENTIFIER->Set``` points to a [property set](https://learn.microsoft.com/en-us/windows-hardware/drivers/stream/avstream-property-sets)
 *  ```PKSIDENTIFIER->Id``` points to the specific property within the specefied property set
 
