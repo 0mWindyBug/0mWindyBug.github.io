@@ -107,9 +107,9 @@ As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPRO
 As with all KS IOCTLs, ```IOCTL_KS_PROPERTY``` is defined as ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
 
 ## Blocking microphone access 
-AVs allow the user to conifgure the type of protection applied on the microphone, this configuration tends to be under the privacy protection settings.
+AVs allow the user to conifgure the type of protection applied on the microphone,typically under the privacy protection settings.
 Let's start by implementing the most robust configuration - blocking any attempt to record our microphone.
-A straightforward approach is to simply block incoming ```IOCTL_KS_PROPERTY``` IRPs setting the ```KSSTATE_RUN``` property of the ```KSPROPERTY_CONNECTION_STATE``` property set. However, to be able to support other configuration options in the future, a better design would be to notify a UM service whenever such request occurs, using an [inverted call model](https://www.osronline.com/article.cfm%5Eid=94.htm#:~:text=Driver%20writers%20often%20ask%20whether%20or%20not%20a,that%20can%20be%20used%20to%20achieve%20similar%20functionality.)). Next, we can place the IRP in a [cancel safe queue](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/cancel-safe-irp-queues), wait for a response from the service indicating the way the driver should handle the request, extract it from the queue and complete it accordingly. Code to handle an ```IOCTL_KS_PROPERTY``` in the said design would looks like the following:
+A straightforward approach is to simply block incoming ```IOCTL_KS_PROPERTY``` IRPs setting the ```KSSTATE_RUN``` property of the ```KSPROPERTY_CONNECTION_STATE``` property set. However, to be able to support other configuration options in the future, a better design would be to notify a UM service whenever such request occurs, using the [inverted call model](https://www.osronline.com/article.cfm%5Eid=94.htm#:~:text=Driver%20writers%20often%20ask%20whether%20or%20not%20a,that%20can%20be%20used%20to%20achieve%20similar%20functionality.)). Next, we can place the IRP in a [cancel safe queue](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/cancel-safe-irp-queues), wait for a response from the service indicating the way the driver should handle the request, extract it from the queue and complete it accordingly. Code to handle an ```IOCTL_KS_PROPERTY``` in the said design would looks like the following:
 ```cpp
 bool filter::KsPropertyHandler(PDEVICE_OBJECT DeviceObject, PIRP Irp, PIO_STACK_LOCATION IoStackLocation)
 {
@@ -218,8 +218,8 @@ NTSTATUS client::device_control(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 ```
 
 ## Completion thread context
-KS IOCTLs are ```METHOD_NEITHER```, remember? Once we decide to pend a KS IOCTL, we have to ensure we don't complete it in an arbitrary thread context. ksthunk, the driver below us in the stack, will try to map and access the provided user buffers, which are valid only in the caller's context.  
-The solution? queueing a completion APC to the caller thread, of course!
+KS IOCTLs are ```METHOD_NEITHER```, remember? Once we decide to pend a KS IOCTL, we have to ensure we don't complete it in an arbitrary thread context, as ksthunk, the driver below us in the stack, will try to map and access the provided user buffers  which are valid only in the caller's context. That means when completing the previously pended IRP, we must do that through queueing an apc to the 
+caller thread.
 ```cpp
 
 void apc::normal_routine(PVOID NormalContext, PVOID SystemArgument1, PVOID SystemArgument2)
@@ -256,11 +256,11 @@ void apc::normal_routine(PVOID NormalContext, PVOID SystemArgument1, PVOID Syste
 }
 ```
 
-## Diving deeper  
-There's still more work to be done, since the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` is sent from the audio engine, we need to find another way to identify the audio recording process. Let's take a closer look at the subsystem's components, with our driver involved: 
+## More work to be done  
+Since the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` is sent from the audio engine, all requests seem as if they were originated from it. We need a to find  way to construct context and identify the recording process. Let's take a closer look at the subsystem's components, with our driver involved: 
 <img src="{{ site.url }}{{ site.baseurl }}/images/AudioGuardFlow.png" alt="">
 
- let's take a look at sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
+The following is a sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
 ```cpp
     hr = CoInitializeEx(NULL, COINIT_SPEED_OVER_MEMORY);
     EXIT_ON_ERROR(hr)
@@ -360,9 +360,9 @@ There's still more work to be done, since the ```IOCTL_KS_PROPERTY``` - ```KSSTA
     outFile.write(reinterpret_cast<char*>(&waveHeader), sizeof(waveHeader));
 ```
 
-the method of interest is ```pAudioClient->Start()```, which as the name suggests - starts the audio recording by streaming data between the endpoint buffer and the audio engine, and essentially starts the audio recording. 
+The method of interest is ```pAudioClient->Start()```, which as the name suggests - starts the audio recording by streaming data between the endpoint buffer and the audio engine, and essentially starts the audio recording. 
 
-#### Tracing AudioClient->Start 
+####  IAudioClient->Start under the hood
 
 
 
