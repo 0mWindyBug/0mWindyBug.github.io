@@ -361,8 +361,10 @@ The following is a sample code for using the ```IAudioClient``` interface to rec
     outFile.write(reinterpret_cast<char*>(&waveHeader), sizeof(waveHeader));
 ```
 
-The method of interest is ```pAudioClient->Start()```, which as the name suggests - starts the audio recording by streaming data between the endpoint buffer and the audio engine, and essentially starts the audio recording. 
+The method of interest is ```pAudioClient->Start()```, which as the name suggests - starts the audio recording by streaming data between the endpoint buffer and the audio engine. under the hood, the method invokes the ```AudioSrv!AudioServerStartStream``` function over LRPC:
+<insert snippet> 
 
+"taking a look at it we see the WNF call" 
 
 
 
