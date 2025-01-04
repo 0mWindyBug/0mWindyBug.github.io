@@ -434,9 +434,9 @@ We need to identify where the PID is initialized to determine whether it can be 
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RpcGetProcess.png" alt="">
 
-<img src="{{ site.url }}{{ site.baseurl }}/images/RpcBindingLocalPid.png" alt="">
-
 The pid is retrieved via ```RPCRT4!I_RpcBindingInqLocalClientPID```, used by ncalrpc servers to identify the client process id from the server context. 
+
+<img src="{{ site.url }}{{ site.baseurl }}/images/RpcBindingLocalPid.png" alt="">
 
 > LRPC requests are sent over ALPC, where each message delivered contains both the data and the ALPC protocol header, described by a ```PORT_MESSAGE``` structure. This header has a ```ClientId``` field, which has both senders PID and TID. Upon receiving an ALPC request the RPC runtime inside the server process saves these values in the ```RPC_BINDING_HANDLE``` object, where they can be retrieved from just like above!
 
