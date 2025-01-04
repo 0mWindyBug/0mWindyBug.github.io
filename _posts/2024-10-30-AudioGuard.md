@@ -107,9 +107,9 @@ As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPRO
 As with all KS IOCTLs, ```IOCTL_KS_PROPERTY``` is defined as ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
 
 ## Blocking microphone access 
-AVs allow the user to conifgure the type of protection applied on the microphone,typically under the privacy protection settings.
+AVs allow the user to conifgure the type of protection applied on the microphone,typically as an option under the privacy protection settings.
 Let's start by implementing the most robust configuration - blocking any attempt to record our microphone.
-A straightforward approach is to simply block incoming ```IOCTL_KS_PROPERTY``` IRPs setting the ```KSSTATE_RUN``` property of the ```KSPROPERTY_CONNECTION_STATE``` property set. However, to be able to support other configuration options in the future, a better design would be to notify a UM service whenever such request occurs, using the [inverted call model](https://www.osronline.com/article.cfm%5Eid=94.htm#:~:text=Driver%20writers%20often%20ask%20whether%20or%20not%20a,that%20can%20be%20used%20to%20achieve%20similar%20functionality.)). Next, we can place the IRP in a [cancel safe queue](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/cancel-safe-irp-queues), wait for a response from the service indicating the way the driver should handle the request, extract it from the queue and complete it accordingly. Code to handle an ```IOCTL_KS_PROPERTY``` in the said design would look like the following:
+A straightforward approach is to simply block incoming ```IOCTL_KS_PROPERTY``` IRPs setting the ```KSSTATE_RUN``` property of the ```KSPROPERTY_CONNECTION_STATE``` property set. However, to be able to support other configuration options in the future, a more generic design would be to notify a UM service whenever such request occurs, using the [inverted call model](https://www.osronline.com/article.cfm%5Eid=94.htm#:~:text=Driver%20writers%20often%20ask%20whether%20or%20not%20a,that%20can%20be%20used%20to%20achieve%20similar%20functionality.)). Next, we can place the IRP in a [cancel safe queue](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/cancel-safe-irp-queues), wait for a response from the service indicating the way the driver should handle the request, extract it from the queue and complete it accordingly. Code to handle an ```IOCTL_KS_PROPERTY``` in the said design would look like the following:
 ```cpp
 bool filter::KsPropertyHandler(PDEVICE_OBJECT DeviceObject, PIRP Irp, PIO_STACK_LOCATION IoStackLocation)
 {
@@ -257,11 +257,13 @@ void apc::normal_routine(PVOID NormalContext, PVOID SystemArgument1, PVOID Syste
 ```
 
 ## More work to be done  
-The ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is sent from the audio engine, thus all requests seem as if they were originated from it. We need a to find  way to construct context back to the recording process. Let's take a closer look at the subsystem's components, with our driver involved: 
+The ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is sent from the audio engine, all requests seem as if they were originated from it. We need a to find  way to construct context back to the recording process. So let's take a closer look at what we know so far regarding the subsystem's components, with our driver involved: 
 <img src="{{ site.url }}{{ site.baseurl }}/images/AudioGuardFlow.png" alt="">
 
-## IAudioClient->Start under the hood
-The following is a sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
+The next sections will focus on finding a reliable option to construct context back to the recording process.
+
+## The IAudioClient COM interface
+The following is sample code for using the ```IAudioClient``` interface to record input from a connected microphone and save it to a .wav file:
 ```cpp
     hr = CoInitializeEx(NULL, COINIT_SPEED_OVER_MEMORY);
     EXIT_ON_ERROR(hr)
@@ -361,6 +363,7 @@ The following is a sample code for using the ```IAudioClient``` interface to rec
     outFile.write(reinterpret_cast<char*>(&waveHeader), sizeof(waveHeader));
 ```
 
+## Reversing audiosrv!AudioServerStartStream
 The method of interest is ```pAudioClient->Start()```, which as the name suggests - starts the audio recording by streaming data between the endpoint buffer and the audio engine. under the hood, the method invokes the ```AudioSrv!AudioServerStartStream``` function over LRPC:
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/audiorpc2.png" alt="">
@@ -374,10 +377,9 @@ Using RPCView, we find out the RPC interface name is AudioClientRpc, Exported by
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/audiorpc4.png" alt="">
 
-Specifically, procnum 8 is mapped to the ```AudioSrv!AudioServerStartStream``` function as said before.
+Specifically, as said before, procnum 8 is mapped to the ```AudioSrv!AudioServerStartStream```. 
 
-We can hook RPC here to construct context, but for obvious reasons monitoring from the process recording the audio, where the attacker has already gained code execution, is not ideal. So we dig deeper.
-Statically reversing ```AudioSrv!AudioServerStartStream``` reveals a call to ```RtlPublishWnfStateData```
+A runtime RPC hook can be used here construct context, but for obvious reasons monitoring from the process recording the audio, where the attacker has already gained code execution, is not ideal. So we need to dig deeper. Statically reversing ```AudioSrv!AudioServerStartStream``` reveals a call to ```RtlPublishWnfStateData```
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/AudioServerWnfCallStatic.png" alt="">
 
@@ -385,7 +387,7 @@ For those unfamiliar with WNF, I highly recommend you check out Alex Ionescu's [
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RtlPublishWnfStateData_stack.png" alt="">
 
-We can be called whenever a process is starting to capture audio, cool! but does WNF tell us which process it is? 
+We can be called whenever a process is starting to capture audio, cool! but does WNF tell us about the process? 
 let's inspect the data passed by the publisher 
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RtlPublishWnfStateData_params2.png" alt="">
@@ -422,28 +424,34 @@ NTSTATUS wnf::Callback(PWNF_SUBSCRIPTION Subscription, PWNF_STATE_NAME StateName
 }
 ```
 
-Is that it? can we combine WNF with the filtering of ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRPs and selectively block / allow microphone access on a per process basis? No, not quite. Unfortunately the audio service publishes the WNF event only after the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP has been completed, which renders WNF unusable. Having said that, the process id published by ```RtlPublishWnfStateData``` has to come from somewhere, if we can access it from within the audio service before the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is initiated, that's good news. 
+Is that it? can we combine WNF with the filtering of ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRPs and selectively block / allow microphone access on a per process basis? Well, No, not quite. The audio service publishes the WNF event only after the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP has been completed, which renders WNF unusable for our goal. Having said that, the process id published by ```RtlPublishWnfStateData``` has to come from somewhere, hopfully we can access it from within the audio service before the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is initiated.
 
-## Tracing backwards from RtlPublishWnfStateData
-```RtlPublishWnfStateData``` is called from ```AudioSrv!AudioServerStartStream```, let's start by inspecting it's parameters 
+## Finding where the PID is initialized
+Our goal is to find where the PID published by WNF is retreived. 
+```RtlPublishWnfStateData``` is called from ```AudioSrv!AudioServerStartStream```,so let's start by inspecting it's parameters 
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/CvadServer.png" alt="">
 
 We can see the first argument is a pointer to an object of type ```audiosrv!CVADServer```, one of it's fields contains the PID of the audio recording process (```0x3d30``` in this case). the ```audiosrv!CVADServer``` object is initialized in ```audiosrv!AudioServerInitialize_Internal``` which is called in a response to the initial client call to ```pAudioClient->Initialize```.
-We need to identify where the PID is initialized to determine whether it can be trusted. For example, if the PID is provided by the client, it cannot be trusted. Reversing of the function reveals ```audiosrv!AudioServerInitialize_Internal``` constructs an object of type ```IAudioProcess```,and passes it to  ```AudioSrvPolicyManager!CApplicationManager::RpcGetProcess``` :
+We need to identify where the PID is initialized to determine whether it can be trusted. If the PID is provided by the client, it cannot be trusted. Reversing of the function reveals ```audiosrv!AudioServerInitialize_Internal``` constructs an object of type ```IAudioProcess```,and passes it to  ```AudioSrvPolicyManager!CApplicationManager::RpcGetProcess``` :
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RpcGetProcess.png" alt="">
 
 > CProcess is an object pointed by one of the fields of IAudioProcess
 
-The pid is retrieved via ```RPCRT4!I_RpcBindingInqLocalClientPID```, used by ncalrpc servers to identify the client process id from the server context. 
+The pid is retreived via ```RPCRT4!I_RpcBindingInqLocalClientPID```, used by ncalrpc servers to identify the client process id from the server context. 
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RpcBindingLocalPid.png" alt="">
 
-> LRPC requests are sent over ALPC, where each message delivered contains both the data and the ALPC protocol header, described by a ```PORT_MESSAGE``` structure. This header has a ```ClientId``` field, which has both senders PID and TID. Upon receiving an ALPC request the RPC runtime inside the server process saves these values in the ```RPC_BINDING_HANDLE``` object, where they can be retrieved from just like above!
+> LRPC requests are sent over ALPC, where each message delivered contains both the data and the ALPC protocol header, described by a ```PORT_MESSAGE``` structure. This header has a ```ClientId``` field, which has both senders PID and TID. Upon receiving an ALPC request the RPC runtime inside the server process saves these values in the ```RPC_BINDING_HANDLE``` object, where they can be retrieved from just like above
 
-The retrieved PID is then stored in the ```IAudioProcess``` object. Later on, the same ```IAudioProcess``` object is used to construct ```CVADServer```, explaining how the first argument to ```AudioServerStartStream``` is initialized.
+The retreived PID is then stored in the ```IAudioProcess``` object. Later on, the same ```IAudioProcess``` object is used to construct ```CVADServer```, explaining how the first argument to ```AudioServerStartStream``` is initialized.
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/CvadServerCtor.png" alt="">
 
-Since we know the client pid is coming from the RPC runtime and is not directly controlled by client input, a runtime hook on ```AudioSrv!AudioServerStartStream``` is a valid option to construct context!
+Since we now know the client pid is coming from the RPC runtime and is not directly controlled by client input, a runtime hook on ```AudioSrv!AudioServerStartStream``` is a valid option to construct context! I will leave the task of extending the driver for the reader,  as the way to configure the allow / block process configuration really depends on your environment, and is straightforward from a techniqual perspective.
+
+## Final notes 
+Many AV-like detection capabilities can be implemented through built in mechanisms such as ETW, callbacks, WFP and minifilters. For audio tho, we had to develop our own heuristic, learning about kernel streaming and the way the audio subsystem components interact with each other in the process, and personally I found it fun. As always, feel free to contact me on [X](https://x.com/0xwindybug?s=21&t=KmxCN1W2Ggg2br8H8_VXHw) for any questions, feedback, or otherwise, you may have! thanks for reading!
+
+
