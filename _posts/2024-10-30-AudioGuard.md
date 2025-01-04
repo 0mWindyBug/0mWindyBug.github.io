@@ -451,6 +451,6 @@ The retreived PID is then stored in the ```IAudioProcess``` object. Later on, th
 Since we now know the client pid is coming from the RPC runtime and is not directly controlled by client input, a runtime hook on ```AudioSrv!AudioServerStartStream``` is a valid option to construct context! I will leave the task of extending the driver for the reader,  as the way to configure the allow / block process configuration really depends on your environment, and is straightforward from a techniqual perspective.
 
 ## Final notes 
-Many AV-like detection capabilities can be implemented through built in mechanisms such as ETW, callbacks, WFP and minifilters. For audio tho, we had to develop our own heuristic, learning about kernel streaming and the way the audio subsystem components interact with each other in the process, and personally I found it fun. As always, feel free to contact me on [X](https://x.com/0xwindybug?s=21&t=KmxCN1W2Ggg2br8H8_VXHw) for any questions, feedback, or otherwise, you may have! thanks for reading!
+Many AV-like detection capabilities can be implemented through built in mechanisms such as ETW, callbacks, WFP and minifilters. For audio tho, we had to develop our own heuristic, learning about kernel streaming and the way the audio subsystem components interact with each other in the process, which I personally I found fun. As always, feel free to contact me on [X](https://x.com/0xwindybug?s=21&t=KmxCN1W2Ggg2br8H8_VXHw) for any questions, feedback, or otherwise, you may have! thanks for reading!
 
 
