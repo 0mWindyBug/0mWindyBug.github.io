@@ -376,8 +376,7 @@ Using RPCView, we find out the RPC interface name is AudioClientRpc, Exported by
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/audiorpc4.png" alt="">
 
-Specifically, as said before, procnum 8 is mapped to the ```AudioSrv!AudioServerStartStream```. 
-
+Specifically, as said before, procnum 8 is mapped to the ```AudioSrv!AudioServerStartStream```.
 A runtime RPC hook can be used here construct context, but for obvious reasons monitoring from the process recording the audio, where the attacker has already gained code execution, is not ideal. So we need to dig deeper. Statically reversing ```AudioSrv!AudioServerStartStream``` reveals a call to ```RtlPublishWnfStateData```
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/AudioServerWnfCallStatic.png" alt="">
