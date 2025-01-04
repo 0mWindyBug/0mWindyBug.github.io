@@ -430,9 +430,11 @@ Is that it? can we combine WNF with the filtering of ```IOCTL_KS_PROPERTY``` - `
 <img src="{{ site.url }}{{ site.baseurl }}/images/CvadServer.png" alt="">
 
 We can see the first argument is a pointer to an object of type ```audiosrv!CVADServer```, one of it's fields contains the PID of the audio recording process (```0x3d30``` in this case). the ```audiosrv!CVADServer``` object is initialized in ```audiosrv!AudioServerInitialize_Internal``` which is called in a response to the initial client call to ```pAudioClient->Initialize```.
-We need to identify where the PID is initialized to determine whether it can be trusted. For example, if the PID is provided by the client, it cannot be trusted. Reversing of the function reveals ```audiosrv!AudioServerInitialize_Internal``` constructs an object of type ```IAudioProcess```, and passes it to  ```AudioSrvPolicyManager!CApplicationManager::RpcGetProcess``` :
+We need to identify where the PID is initialized to determine whether it can be trusted. For example, if the PID is provided by the client, it cannot be trusted. Reversing of the function reveals ```audiosrv!AudioServerInitialize_Internal``` constructs an object of type ```IAudioProcess```,and passes it to  ```AudioSrvPolicyManager!CApplicationManager::RpcGetProcess``` :
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RpcGetProcess.png" alt="">
+
+> CProcess is an object pointed by one of the fields of IAudioProcess
 
 The pid is retrieved via ```RPCRT4!I_RpcBindingInqLocalClientPID```, used by ncalrpc servers to identify the client process id from the server context. 
 
