@@ -425,10 +425,19 @@ NTSTATUS wnf::Callback(PWNF_SUBSCRIPTION Subscription, PWNF_STATE_NAME StateName
 So is that it? can we combine WNF with the filtering of ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRPs and selectively block / allow microphone access on a per process basis? No, not quite. Unfortunately the audio service publishes the WNF event only after the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP has been completed, which renders WNF unusable. Having said that, the process id published by ```RtlPublishWnfStateData``` has to come from somewhere, if we can access it from within the audio service before the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is initiated, that's good news. 
 
 ## Tracing backwards from RtlPublishWnfStateData
+```RtlPublishWnfStateData``` is called from ```AudioSrv!AudioServerStartStream```, let's start by inspecting it's parameters 
 
+<img src="{{ site.url }}{{ site.baseurl }}/images/CvadServer.png" alt="">
 
+We can see the first argument is a pointer to an object of type ```audiosrv!CVADServer```, one of it's fields contains the PID of the audio recording process (```0x3d30``` in this case). the ```audiosrv!CVADServer``` object is initialized in ```audiosrv!AudioServerInitialize_Internal``` which is called in a response to the initial client call to ```pAudioClient->Initialize```.
+We need to identify where the PID is initialized to determine whether it can be trusted. For example, if the PID is provided by the client, it cannot be trusted. Reversing of the function reveals ```audiosrv!AudioServerInitialize_Internal``` constructs an object of type ```IAudioProcess```, and passes it to  ```AudioSrvPolicyManager!CApplicationManager::RpcGetProcess``` :
 
+<img src="{{ site.url }}{{ site.baseurl }}/images/RpcGetProcess.png" alt="">
 
+<img src="{{ site.url }}{{ site.baseurl }}/images/RpcBindingLocalPid.png" alt="">
 
+The pid is retrieved via ```RPCRT4!I_RpcBindingInqLocalClientPID```, used by ncalrpc servers to identify the client process id from the server context. 
 
+> LRPC requests are sent over ALPC, where each message delivered contains both the data and the ALPC protocol header, described by a ```PORT_MESSAGE``` structure. This header has a ```ClientId``` field, which has both senders PID and TID. Upon receiving an ALPC request the RPC runtime inside the server process saves these values in the ```RPC_BINDING_HANDLE``` object, where they can be retrieved from just like above!
 
+The retrieved PID is then stored in the ```IAudioProcess``` object. Later on, the same ```IAudioProcess``` object is used to construct ```CVADServer```, explaining how the first argument t ```IAudioServerStartStream``` is initialized. Since we know the client pid is coming from the RPC runtime and is not directly controlled by client input, a runtime hook on ```AudioSrv!AudioServerStartStream``` is a valid option to construct context!
