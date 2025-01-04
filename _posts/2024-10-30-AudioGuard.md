@@ -27,7 +27,7 @@ The audio engine (```AudioEng.dll```) is loaded by the Audio Device Graph proces
 In addition, it handles communication with the kernel-mode counterpart of the audio subsystem whenever required, through ```AudioKSE.dll``` module. It's worth mentioning the Audio Device Graph was once a protected process, but at least from Windows 10 that is no more the case. 
 
 ### UM Components - AudioSrv.dll 
-The audio service (```AudioSrv.dll```) loads in an instance of svchost, it's responsible for:
+The audio service (```AudioSrv.dll```) loads in an instance of svchost, is responsible for:
 * Starting and controlling audio streams
 * Implementing Windows policies for background audio playback, ducking, etc.
 
