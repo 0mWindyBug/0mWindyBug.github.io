@@ -440,4 +440,8 @@ The pid is retrieved via ```RPCRT4!I_RpcBindingInqLocalClientPID```, used by nca
 
 > LRPC requests are sent over ALPC, where each message delivered contains both the data and the ALPC protocol header, described by a ```PORT_MESSAGE``` structure. This header has a ```ClientId``` field, which has both senders PID and TID. Upon receiving an ALPC request the RPC runtime inside the server process saves these values in the ```RPC_BINDING_HANDLE``` object, where they can be retrieved from just like above!
 
-The retrieved PID is then stored in the ```IAudioProcess``` object. Later on, the same ```IAudioProcess``` object is used to construct ```CVADServer```, explaining how the first argument t ```IAudioServerStartStream``` is initialized. Since we know the client pid is coming from the RPC runtime and is not directly controlled by client input, a runtime hook on ```AudioSrv!AudioServerStartStream``` is a valid option to construct context!
+The retrieved PID is then stored in the ```IAudioProcess``` object. Later on, the same ```IAudioProcess``` object is used to construct ```CVADServer```, explaining how the first argument t ```IAudioServerStartStream``` is initialized.
+
+<img src="{{ site.url }}{{ site.baseurl }}/images/CvadServerCtor.png" alt="">
+
+Since we know the client pid is coming from the RPC runtime and is not directly controlled by client input, a runtime hook on ```AudioSrv!AudioServerStartStream``` is a valid option to construct context!
