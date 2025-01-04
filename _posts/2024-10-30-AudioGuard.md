@@ -390,7 +390,7 @@ let's inspect the data passed by the publisher
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RtlPublishWnfStateData_params2.png" alt="">
 
-In the 4 bytes marked in blue we find the number of processes currently using the microphone, and in the bytes marked in yellow we find the process id of our audio recording process, so we can write the following WNF callback
+In the 4 bytes marked in blue we find the number of processes currently using the microphone, and in the byte marked in yellow we find the process id of our audio recording process, so we can write the following WNF callback
 ```cpp
 NTSTATUS wnf::Callback(PWNF_SUBSCRIPTION Subscription, PWNF_STATE_NAME StateName, ULONG SubscribedEventSet, WNF_CHANGE_STAMP ChangeStamp, PWNF_TYPE_ID TypeId, PVOID CallbackContext)
 {
@@ -422,7 +422,7 @@ NTSTATUS wnf::Callback(PWNF_SUBSCRIPTION Subscription, PWNF_STATE_NAME StateName
 }
 ```
 
-So is that it? can we combine WNF with the filtering of ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRPs and selectively block / allow microphone access on a per process basis? No, not quite. Unfortunately the audio service publishes the WNF event only after the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP has been completed, which renders WNF unusable. Having said that, the process id published by ```RtlPublishWnfStateData``` has to come from somewhere, if we can access it from within the audio service before the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is initiated, that's good news. 
+Is that it? can we combine WNF with the filtering of ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRPs and selectively block / allow microphone access on a per process basis? No, not quite. Unfortunately the audio service publishes the WNF event only after the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP has been completed, which renders WNF unusable. Having said that, the process id published by ```RtlPublishWnfStateData``` has to come from somewhere, if we can access it from within the audio service before the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is initiated, that's good news. 
 
 ## Tracing backwards from RtlPublishWnfStateData
 ```RtlPublishWnfStateData``` is called from ```AudioSrv!AudioServerStartStream```, let's start by inspecting it's parameters 
