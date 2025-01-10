@@ -7,6 +7,7 @@ excerpt: "controlling microphone access on per-process basis"
 
 ## Intro
 Long-term surveillance hinges (among other things) on microphone capture and recording capabilities, serving as a cornerstone of persistent monitoring operations. Threat actors can silently harvest sensitive intelligence from team meetings, voice chats, and  internal discussions - providing access to organizational insights. In this blogpost, our goal is to uncover the internals behind the audio subsystem on Windows, and design a protection solution with the capability of controlling microphone access on a per-process basis.
+All sources can be found [here](https://github.com/0mWindyBug/AudioGuard/tree/main)
 
 ## Some KS terminology 
 Whenever we open our webcam, activate our microphone or enable sound, the system needs to read or write related data such as your voice or captured images into RAM. Kernel Streaming (KS) refers to the Microsoft-provided services that support kernel-mode processing of streamed data. KS serves as a standardized interface for multimedia devices, and aims to provide low latency and simplified multimedia driver development. Microsoft provides three multimedia class driver models: port class, stream class, and AVStream. These class drivers are implemented as export drivers (kernel-mode DLLs) in the system files portcls.sys, stream.sys, and ks.sys. the ```portcls.sys``` driver is what most hardware drivers for PCI and DMA-based audio devices are based on. the port clsss driver supplies a set of port drivers that implement most of the generic kernel streaming (KS) filter functionality, it's essentially another abstraction on top of ```ks.sys``` making the job of driver devs easier.
@@ -257,10 +258,10 @@ void apc::normal_routine(PVOID NormalContext, PVOID SystemArgument1, PVOID Syste
 ```
 
 ## More work to be done  
-The ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is sent from the audio engine, all requests seem as if they were originated from it. We need a to find  way to connect the context back to the recording process. Let's take a closer look at what we know so far regarding the audio subsystem's components, with our driver involved: 
+The ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is sent from the audio engine, so all requests seem as if they were originated from it. We need to find a way to connect context back to the recording process. Let's take a closer look at what we have so far with our driver involved: 
 <img src="{{ site.url }}{{ site.baseurl }}/images/AudioGuardFlow.png" alt="">
 
-In the next sections, we will explore some of the internals behind the flow of capturing microphone input, aiming to find a reliable way to trace back to the recording process.
+In the next sections, we will explore some of the internals behind the flow of capturing microphone input in more detail, aiming to find a reliable way to trace back to the recording process.
 
 ## The IAudioClient COM interface
 The following is sample code for using the ```IAudioClient```interface (exported by WASAPI) to record input from a connected microphone and save it to a .wav file:
@@ -363,6 +364,7 @@ The following is sample code for using the ```IAudioClient```interface (exported
     outFile.write(reinterpret_cast<char*>(&waveHeader), sizeof(waveHeader));
 ```
 > there are other APIs that expose similar functionality, under the hood they operate in a similar manner, the differences are negligible
+> 
 ## Reversing audiosrv!AudioServerStartStream
 The method of interest is ```pAudioClient->Start()```, which as the name suggests - starts the audio recording by streaming data between the endpoint buffer and the audio engine. under the hood, the method invokes the ```AudioSrv!AudioServerStartStream``` function over LRPC:
 
