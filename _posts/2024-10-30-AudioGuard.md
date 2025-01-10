@@ -18,7 +18,7 @@ Conceptually, a stream undergoes processing as it flows along a data path contai
 The audio architecture changed dramatically in the rewrite that was done in Vista. Technically, audio drivers do communicate through kernel streaming, but the graph typically contains only one filter. The graph is owned and operated by the Audio Engine process (Audiodg.exe) Client applications eventually get down to [WASAPI](https://learn.microsoft.com/en-us/windows/win32/coreaudio/wasapi) calls, which result in requests being sent to the Audio Engine through several layers of IPC. The Audio Engine then manages the communication with the device, not through ```IOCTL_KS_READ_STREAM``` (which is used for camera devices) but rather through a shared circular buffer, the Audio Engine writes and reads from this buffer without kernel involvement. This is why audio effects are now done by APOs (audio processing objects), which are COM DLLs that load in the Audio Engine process. Having said that, certian KS IOCTLs are still in use, and we will discuss them in detail later on in the blogpost.
 
 ### UM Components - AudioSes.dll
-As mentioned client applications eventually get down to WSAPI calls, namely through the use of the ```IAudioClient``` COM interface. ```AudioSes.dll``` is the in-process COM server that implements ```IAudioClient```. 
+As mentioned client applications eventually get down to WASAPI calls, namely through the use of the ```IAudioClient``` COM interface. ```AudioSes.dll``` is the in-process COM server that implements ```IAudioClient```. 
 
 ### UM Components - AudioEng.dll
 The audio engine (```AudioEng.dll```) is loaded by the Audio Device Graph process (```Audiodg.exe```), it's responsible for:
@@ -263,7 +263,7 @@ The ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is sent from the audio engin
 In the next sections, we will explore some of the internals behind the flow of capturing microphone input, aiming to find a reliable way to trace back to the recording process.
 
 ## The IAudioClient COM interface
-The following is sample code for using the ```IAudioClient```interface, exported by WSAPI, to record input from a connected microphone and save it to a .wav file:
+The following is sample code for using the ```IAudioClient```interface (exported by WASAPI) to record input from a connected microphone and save it to a .wav file:
 ```cpp
     hr = CoInitializeEx(NULL, COINIT_SPEED_OVER_MEMORY);
     EXIT_ON_ERROR(hr)
