@@ -394,7 +394,7 @@ let's inspect the data passed by the publisher
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RtlPublishWnfStateData_params2.png" alt="">
 
-In the 4 bytes marked in blue we find the number of processes currently using the microphone, and in the bytes marked in yellow we find the process id of our audio recording process! WNF is undocumented, but thank to previous reverse engineering work on the API, we can write the following callback:
+In the 4 bytes marked in blue we find the number of processes currently using the microphone, and in the bytes marked in yellow we find the process id of our audio recording process! WNF is undocumented, but thanks to previous reverse engineering work on the API, we can write the following callback:
 ```cpp
 NTSTATUS wnf::Callback(PWNF_SUBSCRIPTION Subscription, PWNF_STATE_NAME StateName, ULONG SubscribedEventSet, WNF_CHANGE_STAMP ChangeStamp, PWNF_TYPE_ID TypeId, PVOID CallbackContext)
 {
