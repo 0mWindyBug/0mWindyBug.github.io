@@ -108,7 +108,7 @@ As indicated by our driver's log, the property ```KSSTATE_RUN``` of the ```KSPRO
 As with all KS IOCTLs, ```IOCTL_KS_PROPERTY``` is defined as ```METHOD_NEITHER```, meaning data is passed via raw user addresses accessible only in the caller's context. 
 
 ## Blocking microphone access 
-AVs allow the user to conifgure the type of protection applied on the microphone,typically as an option under the privacy protection settings.
+AVs allow the user to conifgure the type of protection applied on the microphone, typically this setting exists under the privacy protection options.
 Let's start by implementing the most robust configuration - blocking any attempt to record our microphone.
 One approach is to  block incoming ```IOCTL_KS_PROPERTY``` IRPs setting the ```KSSTATE_RUN``` property of the ```KSPROPERTY_CONNECTION_STATE``` property set. However, to be able to support other configuration options in the future, a more generic design would be to notify a UM service whenever such request occurs, using the [inverted call model](https://www.osronline.com/article.cfm%5Eid=94.htm#:~:text=Driver%20writers%20often%20ask%20whether%20or%20not%20a,that%20can%20be%20used%20to%20achieve%20similar%20functionality.). Next, we can place the IRP in a [cancel safe queue](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/cancel-safe-irp-queues), wait for a response from the service indicating the way the driver should handle the request, extract it from the queue and complete it accordingly. Code to handle an ```IOCTL_KS_PROPERTY``` in the said design would look like the following:
 ```cpp
