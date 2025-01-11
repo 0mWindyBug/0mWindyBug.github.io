@@ -435,7 +435,7 @@ Whilst we can't use WNF directly, it did have access to the recording process PI
 <img src="{{ site.url }}{{ site.baseurl }}/images/CvadServer.png" alt="">
 
 We can see the first argument is a pointer to an object of type ```audiosrv!CVADServer```, one of it's fields contains the PID of the audio recording process (```0x3d30``` in this case). the ```audiosrv!CVADServer``` object is initialized in ```audiosrv!AudioServerInitialize_Internal``` which is called in a response to the initial client call to ```pAudioClient->Initialize```.
-We need to identify where the PID is initialized to determine whether it can be trusted, I mean if the PID is provided by the client, it clearly can't be trusted. Reversing of the function reveals ```audiosrv!AudioServerInitialize_Internal``` constructs an object of type ```IAudioProcess```,and passes it to  ```AudioSrvPolicyManager!CApplicationManager::RpcGetProcess``` :
+We need to identify where the PID is initialized to determine whether it can be trusted, I mean if the PID is provided by the client, it can't be. Reversing of the function reveals ```audiosrv!AudioServerInitialize_Internal``` constructs an object of type ```IAudioProcess```,and passes it to  ```AudioSrvPolicyManager!CApplicationManager::RpcGetProcess``` :
 
 <img src="{{ site.url }}{{ site.baseurl }}/images/RpcGetProcess.png" alt="">
 
