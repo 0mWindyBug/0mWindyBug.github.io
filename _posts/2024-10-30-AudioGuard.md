@@ -426,7 +426,7 @@ NTSTATUS wnf::Callback(PWNF_SUBSCRIPTION Subscription, PWNF_STATE_NAME StateName
 }
 ```
 ## Problem solved?
-Sounds like it, doesn't it? we can use WNF to get the PID of the recording process, and combine it with the filtering of ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRPs to selectively block / allow microphone access on a per process basis... Well - not quite, nope. The audio service publishes a WNF event only upon the completion of the```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN```, which renders WNF unusable for our purpose. Having said that, the process id published by ```RtlPublishWnfStateData``` has to come from somewhere, hopfully we can access it from within the audio service before the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is initiated.
+Sounds like it, doesn't it? we can use WNF to get the PID of the recording process, and combine it with the filtering of ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRPs to selectively block / allow microphone access on a per process basis... Well - not quite, nope. The audio service publishes a WNF event only upon the completion of the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN```, which renders WNF unusable for our purpose. Having said that, the process id published by ```RtlPublishWnfStateData``` has to come from somewhere, hopfully we can access it from within the audio service before the ```IOCTL_KS_PROPERTY``` - ```KSSTATE_RUN``` IRP is initiated.
 
 ## Finding where the PID is initialized
 Whilst we can't use WNF directly, it did have access to the recording process PID. Could be interesting to find where the PID is retreived. 
